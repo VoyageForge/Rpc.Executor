@@ -1,0 +1,222 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Rpc.Executor.CodeGen</name>
+    </assembly>
+    <members>
+        <member name="T:VoyageForge.Rpc.SourceGen.Diagnostics">
+             <summary>
+             源生成器诊断：把“无法生成”的原因在编译期暴露给开发者，
+             而不是留到运行时才出现“命令怎么没注册”的静默失败。
+            
+             诊断 ID 统一用 <c>RPCHANDLER</c> 前缀，便于在 Unity 控制台按前缀过滤。
+             </summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.SourceGen.Diagnostics.HandlerDuplicate">
+            <summary>同一请求类型注册了多个处理器（一个请求类型只能有一个处理器）。</summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.SourceGen.HandlerModelBuilder">
+            <summary>
+            从实现类声明构建处理器模型：
+            优先识别 RequestHandlerBase / AsyncRequestHandlerBase；
+            也支持直接实现 IRequestHandler&lt;TRequest,TResponse&gt; / IAsyncRequestHandler&lt;...&gt;（一个类可多个）。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.SourceGen.HandlerModelBuilder.Build(Microsoft.CodeAnalysis.GeneratorSyntaxContext,System.Threading.CancellationToken)">
+            <summary>构建模型；不是处理器实现类时返回空。</summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.SourceGen.RpcHandlerGenerator">
+            <summary>
+            处理器生成器入口（编译期运行，产物不手改）：
+            <list type="bullet">
+            <item>扫描继承 <c>RequestHandlerBase</c> / <c>AsyncRequestHandlerBase</c> 的类；</item>
+            <item>也扫描直接实现 <c>IRequestHandler&lt;TRequest,TResponse&gt;</c> / <c>IAsyncRequestHandler&lt;...&gt;</c> 的类（一个类可多个）；</item>
+            <item>为每个程序集生成 <c>VoyageForge.Rpc.Generated.RpcHandlerCatalog</c>，</item>
+            <item>重复处理器在编译期报 <c>RPCHANDLER001</c>。</item>
+            </list>
+            运行时由 <c>RpcHandlerCatalogCache</c> 找到该目录，<c>RpcExecutor</c> 再按请求类型分发。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.SourceGen.RpcHandlerGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext)">
+            <inheritdoc />
+        </member>
+        <member name="T:VoyageForge.Rpc.SourceGen.RpcHandlerModel">
+            <summary>处理器模型：请求类型 → 处理器类型（同步/异步）。</summary>
+        </member>
+        <member name="P:VoyageForge.Rpc.SourceGen.RpcHandlerModel.RequestCodeName">
+            <summary>请求类型全名（生成代码用）。</summary>
+        </member>
+        <member name="P:VoyageForge.Rpc.SourceGen.RpcHandlerModel.HandlerCodeName">
+            <summary>处理器类型全名（生成代码用）。</summary>
+        </member>
+        <member name="P:VoyageForge.Rpc.SourceGen.RpcHandlerModel.IsAsync">
+            <summary>是否异步处理器。</summary>
+        </member>
+        <member name="P:VoyageForge.Rpc.SourceGen.RpcHandlerModel.Location">
+            <summary>诊断位置。</summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.SourceGen.RpcHandlerSourceWriter">
+            <summary>生成处理器目录：一个程序集一个 RpcHandlerCatalog。</summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.CodeGen.RpcGenerator">
+            <summary>
+            RPC 源代码生成器：扫描 [RpcService] 契约，生成方法 ID、描述符表、重载解析器和 Slot switch 分发器。
+            </summary>
+            <remarks>
+            Unity 2022.3 的 Roslyn 兼容基线为 3.8，因此这里采用 ISourceGenerator + ISyntaxReceiver。
+            生成器在编译期间运行；最终输出是普通 C# 源码，编译后的游戏不需要加载 Microsoft.CodeAnalysis。
+            </remarks>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.RpcServiceAttributeName">
+            <summary>必须与 Runtime RpcServiceAttribute 的完整命名空间/类型名一致。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.CancellationTokenName">
+            <summary>取消令牌属于框架参数，不计入请求参数和 MethodId。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.MethodIdCollision">
+            <summary>RPC001：方法规范签名重复或 64 位 MethodId 发生哈希碰撞。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.UnsupportedSignature">
+            <summary>RPC002：方法使用了当前版本不支持的语言签名。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.InvalidService">
+            <summary>RPC003：服务声明不是有效的非泛型 class/interface，或服务名为空。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.Initialize(Microsoft.CodeAnalysis.GeneratorInitializationContext)">
+            <summary>
+            Initialize 是 Roslyn 调用的准备阶段。我们告诉编译器：请创建 RpcSyntaxReceiver 收集类型声明候选。
+            这里只登记接收器，不在初始化时读取项目文件，也不执行生成工作。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.Execute(Microsoft.CodeAnalysis.GeneratorExecutionContext)">
+            <summary>
+            Execute 是主要生成阶段。接收器先收集语法节点，本方法再取得语义符号、校验方法并输出代码。
+            </summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.CodeGen.RpcGenerator.RpcSyntaxReceiver">
+            <summary>
+            语法接收器只收集可能作为服务契约的 class/interface。
+            不在这里搜索 [RpcService] 文本，是为了避免 using alias、global:: 和同名特性造成误判。
+            </summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.RpcSyntaxReceiver.TypeDeclarations">
+            <summary>本次 Compilation 中遇到的类型声明候选；其中大部分普通类型会在 Execute 被过滤。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.RpcSyntaxReceiver.OnVisitSyntaxNode(Microsoft.CodeAnalysis.SyntaxNode)">
+            <summary>Roslyn 每访问一个语法节点就回调一次；这里只收集 class/interface/record 的类型声明。</summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod">
+            <summary>生成器内部的一条服务方法记录；它不是 Runtime API，只为后续生成代码准备数据。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.ContractType">
+            <summary>服务契约类型；最终 switch 将 object instance 转换为此接口/类后直接调用方法。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.Method">
+            <summary>Roslyn 解析后的方法符号，包含参数、返回值、可见性等真实语义信息。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.ServiceName">
+            <summary>最终注册表使用的服务名。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.CanonicalKey">
+            <summary>MethodId 的规范化输入 key。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.MethodId">
+            <summary>FNV-1a 64 位稳定 ID。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.Slot">
+            <summary>switch 分发编号；仅在当前生成程序集内使用。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.RawArgumentCount">
+            <summary>不包含 CancellationToken 的请求参数数量。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.IsAsync">
+            <summary>是否返回 Task 或 Task&lt;T&gt;。</summary>
+        </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.ResultType">
+            <summary>实际业务返回类型；无返回值使用 void。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.CollectMethods(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.IEnumerable{Microsoft.CodeAnalysis.INamedTypeSymbol},System.Boolean@)">
+            <summary>
+            从服务契约符号中收集方法并执行第一轮校验。
+            一个方法一旦签名不受支持，就报告精确位置并停止输出，防止生成代码继续产生级联错误。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.BuildMethodSignatureForSort(Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>为 Slot 排序构造不含返回值的签名，避免重载在不同编译时出现不稳定顺序。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetUnsupportedReason(Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>检查当前版本的公开方法签名约束，并返回不支持原因；支持时返回 null。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.IsCancellationToken(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>识别框架控制参数 CancellationToken。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.ResolveReturnType(Microsoft.CodeAnalysis.Compilation,Microsoft.CodeAnalysis.ITypeSymbol,System.Boolean@,Microsoft.CodeAnalysis.ITypeSymbol@)">
+            <summary>把返回类型归一化为 IsAsync + ResultType，便于生成器只维护一种调用结果模型。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.ReportMethodIdCollisions(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
+            <summary>检查规范 key 重复以及 FNV 64 位哈希实际碰撞；true 表示已经报告错误。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitDispatcher(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
+            <summary>
+            输出完整的 RpcGeneratedDispatcher.g.cs。代码包括 ID 常量、描述符数组、重载解析和 Slot switch。
+            注意：这里生成的是 C# 源码文本，不是在编译期实例化对象或创建动态程序集。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitDescriptor(System.Text.StringBuilder,VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod)">
+            <summary>生成一个 MethodDescriptor 数组初始化项；参数类型按实际方法声明顺序保存。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitDispatchCase(System.Text.StringBuilder,VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod)">
+            <summary>
+            生成一个 switch case。参数顺序与契约方法保持一致；CancellationToken 使用 DispatchAsync 收到的 ct。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.IsNonGenericTask(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>判断返回类型是不是 System.Threading.Tasks.Task（非泛型）。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.IsGenericTask(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>判断返回类型是不是 System.Threading.Tasks.Task&lt;T&gt;。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetServiceName(Microsoft.CodeAnalysis.INamedTypeSymbol)">
+            <summary>读取服务特性中的名称；未显式传入时使用契约完整类型名。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.BuildCanonicalKey(System.String,Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>把服务/方法/参数转换成不含歧义的 key；参数类型不含 CancellationToken。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.TypeIdentity(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>生成稳定类型身份名，避免 int/Int32 或不同命名空间的同名类型产生冲突。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.TypeSyntax(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>生成 typeof(...) 中使用的全限定 C# 类型写法。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetTypeIdentity(Microsoft.CodeAnalysis.INamedTypeSymbol)">
+            <summary>取得不带 global:: 前缀的类型身份名。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.HasAttribute(Microsoft.CodeAnalysis.INamedTypeSymbol,System.String)">
+            <summary>通过完整 Attribute 类型名判断服务契约是否真的使用了 RpcServiceAttribute。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.Report(Microsoft.CodeAnalysis.GeneratorExecutionContext,Microsoft.CodeAnalysis.DiagnosticDescriptor,Microsoft.CodeAnalysis.Location,System.Object[])">
+            <summary>报告诊断。location 指向用户声明位置，而不是生成器本身。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.CSharpEscape(System.String)">
+            <summary>把用户字符串转义成合法 C# 字符串字面量内部内容。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.XmlEscape(System.String)">
+            <summary>把用户文字转义成合法 XML 文档注释。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.Fnv1A64(System.String)">
+            <summary>
+            固定的 FNV-1a 64 位实现：UTF-8 编码后逐字节 XOR，再乘 prime。
+            这里的常量、编码和 BuildCanonicalKey 必须与 Rpc.Executor Runtime 保持一致。
+            </summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.Executor.CodeGen.RpcMessageTypeIdGenerator">
+            <summary>
+            为 [RpcMessage] 类型生成 MessageId 常量与查表方法。
+            显式 [RpcMessage(1001)] 优先；未标注类型从 1000 开始自动编号（按类型全名排序，保证稳定）。
+            </summary>
+        </member>
+        <member name="T:VoyageForge.Rpc.Executor.CodeGen.RpcMessageTypeIdGenerator.Receiver">
+            <summary>收集带 [RpcMessage] 的类型。</summary>
+        </member>
+    </members>
+</doc>
