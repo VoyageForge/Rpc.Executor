@@ -18,6 +18,11 @@ namespace VoyageForge.Rpc.Executor.Abstractions
     {
         /// <summary>无匹配返回 false；存在同等匹配的重载时应抛出 RpcMethodAmbiguousException。</summary>
         bool TryResolve(string serviceName, string methodName, object[] args, out MethodDescriptor descriptor);
+
+        /// <summary>
+        /// 按 MethodId（FNV-1a 64）解析（Mirror 式主路径）：生成器用 switch(MethodId) 直接命中。
+        /// </summary>
+        bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor);
     }
 
     /// <summary>

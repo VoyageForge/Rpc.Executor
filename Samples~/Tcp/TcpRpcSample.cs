@@ -52,7 +52,13 @@ namespace VoyageForge.Rpc.Samples.Tcp
         }
 
         /// <summary>按 Slot 静态调用 TCP Sample 的业务接口。</summary>
-        public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
+                /// <summary>Mirror 式：按 MethodId 命中；示例/测试不使用，返回 false。</summary>
+        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
+        {
+            descriptor = null;
+            return false;
+        }
+public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
         {
             if (slot != 0) throw new InvalidOperationException("未知的 TCP Sample Slot：" + slot);
             ITcpCalculator calculator = instance as ITcpCalculator;

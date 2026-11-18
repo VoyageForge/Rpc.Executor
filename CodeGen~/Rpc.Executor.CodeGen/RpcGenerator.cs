@@ -337,6 +337,30 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("            if (ambiguous) throw new global::Rpc.Executor.RpcMethodAmbiguousException(serviceName, methodName);")
                 .AppendLine("            return descriptor != null;")
                 .AppendLine("        }")
+                                .AppendLine("        /// <summary>Mirror 式：按 MethodId 直接命中（switch），再校验参数数量与可转换性。</summary>")
+                .AppendLine("        public bool TryResolve(ulong methodId, object[] args, out global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor descriptor)")
+                .AppendLine("        {")
+                .AppendLine("            descriptor = null;")
+                .AppendLine("            object[] raw = args ?? global::System.Array.Empty<object>();")
+                .AppendLine("            switch (methodId)")
+                .AppendLine("            {");
+
+            foreach (ServiceMethod method in methods)
+            {
+                source.AppendLine("                case RpcMethodIds.Method_" + method.Slot + ":")
+                    .AppendLine("                {")
+                    .AppendLine("                    global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor candidate = s_methods[" + method.Slot + "];")
+                    .AppendLine("                    if (candidate.MethodId != methodId) return false;")
+                    .AppendLine("                    if (GetRawArgumentCount(candidate.ParameterTypes) != raw.Length) return false;")
+                    .AppendLine("                    if (GetCandidateScore(raw, candidate.ParameterTypes) < 0) return false;")
+                    .AppendLine("                    descriptor = candidate;")
+                    .AppendLine("                    return true;")
+                    .AppendLine("                }");
+            }
+
+            source.AppendLine("                default: return false;")
+                .AppendLine("            }")
+                .AppendLine("        }")
                 .AppendLine("        // 描述符含 CancellationToken，但请求数组没有它；计算真实位置参数个数时要排除。")
                 .AppendLine("        private static int GetRawArgumentCount(global::System.Type[] parameterTypes)")
                 .AppendLine("        {")

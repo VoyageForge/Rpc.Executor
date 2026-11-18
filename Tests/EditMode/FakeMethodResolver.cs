@@ -24,5 +24,22 @@ namespace VoyageForge.Rpc.Executor.Tests
             if (serviceName == null || methodName == null) return false;
             return _methods.TryGetValue(serviceName + "." + methodName, out descriptor);
         }
+
+        /// <inheritdoc />
+        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
+        {
+            descriptor = null;
+            if (methodId == 0) return false;
+            foreach (MethodDescriptor candidate in _methods.Values)
+            {
+                if (candidate.MethodId == methodId)
+                {
+                    descriptor = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

@@ -113,8 +113,14 @@ namespace VoyageForge.Rpc.Executor
                 MethodDescriptor method;
                 try
                 {
-                    if (!_resolver.TryResolve(request.ServiceName, request.MethodName, rawArguments, out method))
-                        return RpcResponse.Fail("METHOD_NOT_FOUND", "方法不存在或参数无法匹配：" + request.MethodName);
+                    // Mirror 式：MethodId 优先（生成器 switch 命中），为 0 时回退字符串。
+                    bool resolved = request.MethodId != 0
+                        ? _resolver.TryResolve(request.MethodId, rawArguments, out method)
+                        : _resolver.TryResolve(request.ServiceName, request.MethodName, rawArguments, out method);
+                    if (!resolved)
+                        return RpcResponse.Fail("METHOD_NOT_FOUND",
+                            "方法不存在或参数无法匹配：" + request.ServiceName + "." + request.MethodName +
+                            " (MethodId=0x" + request.MethodId.ToString("X16") + ")");
                 }
                 catch (RpcMethodAmbiguousException exception)
                 {

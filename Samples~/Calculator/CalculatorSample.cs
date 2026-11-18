@@ -80,7 +80,13 @@ namespace VoyageForge.Rpc.Samples
         }
 
         /// <summary>通过固定 Slot 静态调用 Sample 的业务接口，不使用 MethodInfo.Invoke。</summary>
-        public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
+                /// <summary>Mirror 式：按 MethodId 命中；示例/测试不使用，返回 false。</summary>
+        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
+        {
+            descriptor = null;
+            return false;
+        }
+public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
         {
             ICalculator calculator = instance as ICalculator;
             if (calculator == null) throw new InvalidOperationException("服务实例不是 ICalculator。");

@@ -25,7 +25,13 @@ namespace VoyageForge.Rpc.Executor.Tests
                 return descriptor != null;
             }
 
-            public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
+                    /// <summary>Mirror 式：按 MethodId 命中；示例/测试不使用，返回 false。</summary>
+        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
+        {
+            descriptor = null;
+            return false;
+        }
+public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
             {
                 DispatchedSlot = slot;
                 DispatchedArgs = boundArgs;

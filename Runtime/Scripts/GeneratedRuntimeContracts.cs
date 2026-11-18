@@ -15,6 +15,9 @@ namespace VoyageForge.Rpc.Executor
         /// <summary>根据请求信息选出唯一描述符。这里只做重载选择，不执行真正的类型转换。</summary>
         bool TryResolve(string serviceName, string methodName, object[] args, out MethodDescriptor descriptor);
 
+        /// <summary>Mirror 式：按 MethodId（FNV-1a 64）直接命中。</summary>
+        bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor);
+
         /// <summary>根据 Slot 进入生成的 switch；boundArgs 已含框架注入的 CancellationToken。</summary>
         Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct);
     }
@@ -72,6 +75,12 @@ namespace VoyageForge.Rpc.Executor
         public bool TryResolve(string serviceName, string methodName, object[] args, out MethodDescriptor descriptor)
         {
             return _dispatcher.TryResolve(serviceName, methodName, args, out descriptor);
+        }
+
+        /// <summary>Mirror 式：按 MethodId 命中生成代码的 switch。</summary>
+        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
+        {
+            return _dispatcher.TryResolve(methodId, args, out descriptor);
         }
     }
 }
