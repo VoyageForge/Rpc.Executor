@@ -9,7 +9,10 @@ namespace VoyageForge.Rpc.Samples
         private void Start()
         {
             Button button = FindObjectOfType<Button>();
-            if (button != null) button.onClick.AddListener(() => Debug.Log("[CalculatorSample] 点击：请查看 CalculatorSample 说明"));
+            if (button != null) button.onClick.AddListener(async () =>
+            {
+                await CalculatorSample.RunAsync();
+            });
         }
     }
 }
