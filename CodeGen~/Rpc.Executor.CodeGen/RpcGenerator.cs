@@ -1,4 +1,4 @@
-// 这是独立 CodeGen 项目的入口文件，不属于 Unity Runtime asmdef。
+﻿// 这是独立 CodeGen 项目的入口文件，不属于 Unity Runtime asmdef。
 // dotnet/Visual Studio 编译本项目得到 Rpc.Executor.CodeGen.dll；Unity 只加载这份 DLL。
 
 using System;
@@ -291,7 +291,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("using System;")
                 .AppendLine("using System.Threading;")
                 .AppendLine("using System.Threading.Tasks;")
-                .AppendLine("using Rpc.Executor.Abstractions;")
+                .AppendLine("using VoyageForge.Rpc.Executor.Abstractions;")
                 .AppendLine("namespace VoyageForge.Rpc.Generated")
                 .AppendLine("{")
                 .AppendLine("    /// <summary>自动生成的稳定 RPC 方法 ID 常量。</summary>")
@@ -310,14 +310,14 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("    public sealed class RpcGeneratedDispatcher : global::Rpc.Executor.IGeneratedRpcDispatcher")
                 .AppendLine("    {")
                 .AppendLine("        // 描述符在静态初始化时创建；运行时不扫描类型，也不查找 MethodInfo。")
-                .AppendLine("        private static readonly global::Rpc.Executor.Abstractions.MethodDescriptor[] s_methods = new global::Rpc.Executor.Abstractions.MethodDescriptor[]")
+                .AppendLine("        private static readonly global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor[] s_methods = new global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor[]")
                 .AppendLine("        {");
 
             foreach (ServiceMethod method in methods) EmitDescriptor(source, method);
 
             source.AppendLine("        };")
                 .AppendLine("        /// <summary>按服务名、方法名、参数数量和可转换性选择唯一重载。</summary>")
-                .AppendLine("        public bool TryResolve(string serviceName, string methodName, object[] args, out global::Rpc.Executor.Abstractions.MethodDescriptor descriptor)")
+                .AppendLine("        public bool TryResolve(string serviceName, string methodName, object[] args, out global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor descriptor)")
                 .AppendLine("        {")
                 .AppendLine("            descriptor = null;")
                 .AppendLine("            object[] raw = args ?? global::System.Array.Empty<object>();")
@@ -325,7 +325,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("            bool ambiguous = false;")
                 .AppendLine("            for (int i = 0; i < s_methods.Length; i++)")
                 .AppendLine("            {")
-                .AppendLine("                global::Rpc.Executor.Abstractions.MethodDescriptor candidate = s_methods[i];")
+                .AppendLine("                global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor candidate = s_methods[i];")
                 .AppendLine("                if (!global::System.String.Equals(candidate.ServiceName, serviceName, global::System.StringComparison.Ordinal) ||")
                 .AppendLine("                    !global::System.String.Equals(candidate.MethodName, methodName, global::System.StringComparison.Ordinal)) continue;")
                 .AppendLine("                if (GetRawArgumentCount(candidate.ParameterTypes) != raw.Length) continue;")
@@ -392,7 +392,7 @@ namespace VoyageForge.Rpc.CodeGen
         /// <summary>生成一个 MethodDescriptor 数组初始化项；参数类型按实际方法声明顺序保存。</summary>
         private static void EmitDescriptor(StringBuilder source, ServiceMethod method)
         {
-            source.AppendLine("            new global::Rpc.Executor.Abstractions.MethodDescriptor")
+            source.AppendLine("            new global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor")
                 .AppendLine("            {")
                 .Append("                ServiceName = \"").Append(CSharpEscape(method.ServiceName)).AppendLine("\",")
                 .Append("                MethodName = \"").Append(CSharpEscape(method.Method.Name)).AppendLine("\",")

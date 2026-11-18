@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using VoyageForge.Rpc.Transport;
 
-namespace Rpc.Executor
+namespace VoyageForge.Rpc.Executor
 {
     /// <summary>
     /// 幂等缓存：按 RequestId 去重，默认 5 分钟 TTL。

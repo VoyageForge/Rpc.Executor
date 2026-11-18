@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using VoyageForge.Rpc.Transport;
 
-namespace Rpc.Executor.Abstractions
+namespace VoyageForge.Rpc.Executor.Abstractions
 {
     /// <summary>把请求中的原始对象转换为业务方法所需 CLR 类型的策略接口。</summary>
     public interface IArgumentConverter

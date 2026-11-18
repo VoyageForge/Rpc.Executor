@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using Rpc.Executor;
-using Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Executor;
+using VoyageForge.Rpc.Executor.Abstractions;
 using VoyageForge.Rpc.Transport;
 
 namespace VoyageForge.Rpc.Executor.Tests

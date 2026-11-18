@@ -1,0 +1,18 @@
+﻿{
+  "name": "VoyageForge.Rpc.Executor.Samples.Handlers",
+  "rootNamespace": "VoyageForge.Rpc.Samples.Handlers",
+  "references": [
+    "VoyageForge.Rpc.Executor",
+    "VoyageForge.Rpc.Transport",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

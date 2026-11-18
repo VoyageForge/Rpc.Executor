@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Executor.Abstractions;
 
-namespace Rpc.Executor
+namespace VoyageForge.Rpc.Executor
 {
     /// <summary>Runtime 侧的默认 FNV-1a 64 位方法 ID 计算器。</summary>
     /// <remarks>

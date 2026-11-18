@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Rpc.Executor.Abstractions
+namespace VoyageForge.Rpc.Executor.Abstractions
 {
     /// <summary>服务注册策略。</summary>
     public sealed class RegisterOptions

@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using NUnit.Framework;
-using Rpc.Executor;
+using VoyageForge.Rpc.Executor;
 
 namespace VoyageForge.Rpc.Executor.Tests
 {

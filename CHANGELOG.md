@@ -1,13 +1,15 @@
 ﻿# Changelog
 
+## 0.2.0
+
+- 版本统一为 0.2.0，依赖 `com.voyageforge.rpc-transport` 0.2.0。
+- 命名空间 `Rpc.Executor` → **`VoyageForge.Rpc.Executor`**（与程序集名一致）。
+- 新增 `IdempotencyCache`（默认 5 分钟、只缓存成功响应、RequestId 0 不参与）。
+- 新增 `MessageId`/`RpcMessageAttribute`/`RpcMessageTypeRegistry` 与 CodeGen `RpcMessageTypeIdGenerator`。
+- 生成器：`RpcGenerator`（字符串协议）、`RpcHandlerGenerator`（强类型目录）、`RpcMessageTypeIdGenerator`（MessageId）。
+- 示例：`Tcp`、`Calculator`、`Handlers` 增加场景 + UI 按钮。
+- 测试：EditMode 覆盖服务注册/参数转换/MethodId/执行器/幂等/强类型处理器。
+
 ## 0.0.17
 
-- 新增 `IdempotencyCache`：默认 5 分钟 TTL、只缓存成功响应、`RequestId == 0` 不参与、容量上限；`RpcExecutor` 默认接入。
-- 新增 `MessageId`/`RpcMessageAttribute`/`RpcMessageTypeRegistry` 与 CodeGen `RpcMessageTypeIdGenerator`（生成 `RpcMessageIds`/`RpcMessageTypeMap`）。
-- 新增 EditMode 测试：服务注册、参数转换、MethodId、字符串协议执行器、拦截器、生成器边界、幂等缓存、强类型执行器。
-- CodeGen 升级 Roslyn 4.1、`LangVersion` 9.0；`Rpc.Executor/Build-CodeGen.ps1` 中 Console 构建改为可选。
-- 文档更新：`README.md`、`Documentation/架构说明.md`、`CHANGELOG.md`。
-
-## 0.0.16
-
-- 从旧 `VoyageForge.Rpc` 迁移为独立 `Rpc.Executor` 包（字符串协议 + 强类型处理器合并）。
+- 幂等缓存、MessageId 生成器、EditMode 测试、文档。

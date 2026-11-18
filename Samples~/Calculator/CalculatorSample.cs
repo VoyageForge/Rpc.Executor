@@ -1,9 +1,9 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
-using Rpc.Executor;
-using Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Executor;
+using VoyageForge.Rpc.Executor.Abstractions;
 using VoyageForge.Rpc.Transport;
 
 namespace VoyageForge.Rpc.Samples

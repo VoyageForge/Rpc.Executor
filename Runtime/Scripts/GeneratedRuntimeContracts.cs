@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Executor.Abstractions;
 
-namespace Rpc.Executor
+namespace VoyageForge.Rpc.Executor
 {
     /// <summary>RPC Source Generator 生成的静态分发表必须实现的运行时接口。</summary>
     /// <remarks>

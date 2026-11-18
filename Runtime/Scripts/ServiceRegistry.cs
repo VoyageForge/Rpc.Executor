@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
-using Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Executor.Abstractions;
 
-namespace Rpc.Executor
+namespace VoyageForge.Rpc.Executor
 {
     /// <summary>线程安全的服务实例注册表，保存服务名到服务对象的映射。</summary>
     /// <remarks>

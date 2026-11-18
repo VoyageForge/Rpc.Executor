@@ -1,6 +1,6 @@
 ﻿{
   "name": "com.voyageforge.rpc-executor",
-  "version": "0.0.17",
+  "version": "0.2.0",
   "displayName": "VoyageForge RPC Executor",
   "description": "传输无关的 RPC 执行器：字符串协议 + 强类型处理器、5 分钟幂等缓存、MessageId/TypeId 消息映射与源生成器。",
   "unity": "2022.3",
@@ -14,6 +14,11 @@
       "path": "Samples~/Calculator"
     },
     {
+      "displayName": "Handlers 强类型处理器示例",
+      "description": "演示 IRequestHandler / IAsyncRequestHandler 与 RpcExecutor.Send/SendAsync（生成器自动注册目录）。",
+      "path": "Samples~/Handlers"
+    },
+    {
       "displayName": "TCP RPC 客户端与服务端示例",
       "description": "演示 TCP 长度前缀分帧、序列化、服务端接入 RpcExecutor 与客户端请求。",
       "path": "Samples~/Tcp"
@@ -21,6 +26,6 @@
   ],
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "com.voyageforge.rpc-transport": "0.0.11"
+    "com.voyageforge.rpc-transport": "0.2.0"
   }
 }

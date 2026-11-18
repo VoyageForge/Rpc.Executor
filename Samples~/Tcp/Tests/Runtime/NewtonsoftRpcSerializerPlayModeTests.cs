@@ -113,6 +113,8 @@ namespace VoyageForge.Rpc.Samples.Tcp.Tests
         /// <summary>包装真实 Newtonsoft 序列化器并统计每次实际输出的 Payload 字节数；计数器可安全地跨客户端/服务端并发更新。</summary>
         private sealed class CountingNewtonsoftSerializer : IRpcSerializer
         {
+        public object Deserialize(byte[] data, global::System.Type type) => Deserialize<object>(data);
+
             private readonly NewtonsoftRpcSerializer _inner = new VoyageForge.Rpc.Transport.NewtonsoftRpcSerializer();
             private long _serializedBytes;
 
