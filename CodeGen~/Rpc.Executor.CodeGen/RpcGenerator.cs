@@ -22,7 +22,7 @@ namespace VoyageForge.Rpc.CodeGen
     public sealed class RpcGenerator : ISourceGenerator
     {
         /// <summary>必须与 Runtime RpcServiceAttribute 的完整命名空间/类型名一致。</summary>
-        private const string RpcServiceAttributeName = "Rpc.Executor.RpcServiceAttribute";
+        private const string RpcServiceAttributeName = "VoyageForge.Rpc.Executor.RpcServiceAttribute";
         /// <summary>取消令牌属于框架参数，不计入请求参数和 MethodId。</summary>
         private const string CancellationTokenName = "System.Threading.CancellationToken";
 
@@ -292,6 +292,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("using System.Threading;")
                 .AppendLine("using System.Threading.Tasks;")
                 .AppendLine("using VoyageForge.Rpc.Executor.Abstractions;")
+                .AppendLine("using VoyageForge.Rpc.Transport;")
                 .AppendLine("namespace VoyageForge.Rpc.Generated")
                 .AppendLine("{")
                 .AppendLine("    /// <summary>自动生成的稳定 RPC 方法 ID 常量。</summary>")
@@ -305,9 +306,30 @@ namespace VoyageForge.Rpc.CodeGen
                     .Append(" = 0x").Append(method.MethodId.ToString("X16")).AppendLine("UL;");
             }
 
-            source.AppendLine("    }")
+            source.AppendLine("    }");
+            source.AppendLine("    /// <summary>MethodId → 可读名称（仅诊断/Debug 模式使用，不参与网络传输）。</summary>")
+                .AppendLine("    public static class RpcMethodNames")
+                .AppendLine("    {")
+                .AppendLine("        private static readonly global::System.Collections.Generic.Dictionary<ulong, string> s_names = new global::System.Collections.Generic.Dictionary<ulong, string>()")
+                .AppendLine("        {");
+
+            foreach (ServiceMethod method in methods)
+            {
+                string name = method.ServiceName + "." + method.Method.Name;
+                source.Append("            { RpcMethodIds.Method_").Append(method.Slot)
+                    .Append(", \"").Append(CSharpEscape(name)).AppendLine("\" },");
+            }
+
+            source.AppendLine("        };")
+                .AppendLine("        /// <summary>按 MethodId 查可读名称；未知返回 null。</summary>")
+                .AppendLine("        public static string TryGetName(ulong methodId)")
+                .AppendLine("        {")
+                .AppendLine("            string name;")
+                .AppendLine("            return s_names.TryGetValue(methodId, out name) ? name : null;")
+                .AppendLine("        }")
+                .AppendLine("    }")
                 .AppendLine("    /// <summary>编译期生成的 RPC 方法解析和调用分发器。</summary>")
-                .AppendLine("    public sealed class RpcGeneratedDispatcher : global::Rpc.Executor.IGeneratedRpcDispatcher")
+                .AppendLine("    public sealed class RpcGeneratedDispatcher : global::VoyageForge.Rpc.Executor.IGeneratedRpcDispatcher")
                 .AppendLine("    {")
                 .AppendLine("        // 描述符在静态初始化时创建；运行时不扫描类型，也不查找 MethodInfo。")
                 .AppendLine("        private static readonly global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor[] s_methods = new global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor[]")
@@ -334,7 +356,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("                if (score > bestScore) { descriptor = candidate; bestScore = score; ambiguous = false; }")
                 .AppendLine("                else if (score == bestScore) { ambiguous = true; }")
                 .AppendLine("            }")
-                .AppendLine("            if (ambiguous) throw new global::Rpc.Executor.RpcMethodAmbiguousException(serviceName, methodName);")
+                .AppendLine("            if (ambiguous) throw new global::VoyageForge.Rpc.Executor.RpcMethodAmbiguousException(serviceName, methodName);")
                 .AppendLine("            return descriptor != null;")
                 .AppendLine("        }")
                                 .AppendLine("        /// <summary>Mirror 式：按 MethodId 直接命中（switch），再校验参数数量与可转换性。</summary>")
@@ -396,9 +418,8 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("            return -1;")
                 .AppendLine("        }")
                 .AppendLine("        /// <summary>根据 Slot 执行编译期写出的强类型调用。</summary>")
-                .AppendLine("        public async global::System.Threading.Tasks.Task<object> DispatchAsync(int slot, object instance, object[] args, global::System.Threading.CancellationToken ct)")
+                .AppendLine("        public async global::System.Threading.Tasks.Task<object> DispatchAsync(int slot, object instance, byte[] payload, global::System.Threading.CancellationToken ct)")
                 .AppendLine("        {")
-                .AppendLine("            object[] bound = args ?? global::System.Array.Empty<object>();")
                 .AppendLine("            switch (slot)")
                 .AppendLine("            {");
 
@@ -411,6 +432,132 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("}");
 
             context.AddSource("RpcGeneratedDispatcher.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+            EmitClients(context, methods);
+
+        }
+
+        /// <summary>
+        /// 生成调用端代理：ServicesMap 扩展方法，参数顺序与契约方法一致。
+        /// 0 参数不传 payload；1 参数直接传；2+ 参数组合为 ValueTuple（与 dispatch 的反序列化对应）。
+        /// </summary>
+        private static void EmitClients(GeneratorExecutionContext context, List<ServiceMethod> methods)
+        {
+            StringBuilder source = new StringBuilder(16000);
+            source.AppendLine("// <auto-generated />");
+            source.AppendLine("// 由 RpcGenerator 生成：ServicesMap 调用端代理（参数顺序与契约一致）。");
+            source.AppendLine("#pragma warning disable");
+            source.AppendLine("namespace VoyageForge.Rpc.Generated");
+            source.AppendLine("{");
+
+            foreach (IGrouping<string, ServiceMethod> group in methods.GroupBy(item => item.ContractType.ToDisplayString()))
+            {
+                string contractName = group.First().ContractType.Name;
+                source.Append("    /// <summary>").Append(XmlEscape(contractName)).AppendLine(" 的调用端代理。</summary>");
+                source.Append("    public static class ").Append(contractName).AppendLine("Client");
+                source.AppendLine("    {");
+
+                foreach (ServiceMethod method in group)
+                {
+                    List<IParameterSymbol> rawParameters = method.Method.Parameters
+                        .Where(parameter => !IsCancellationToken(parameter.Type)).ToList();
+                    string resultType = method.ResultType != null && method.ResultType.SpecialType != SpecialType.System_Void
+                        ? TypeSyntax(method.ResultType)
+                        : "object";
+                    string returnType = "global::VoyageForge.Rpc.Transport.RpcResponse<" + resultType + ">";
+
+                    source.Append("        /// <summary>").Append(XmlEscape(method.ServiceName + "." + method.Method.Name)).AppendLine("</summary>");
+                    source.Append("        public static global::System.Threading.Tasks.Task<").Append(returnType)
+                        .Append("> ").Append(method.Method.Name)
+                        .Append("(this global::VoyageForge.Rpc.Executor.ServicesMap api");
+                    foreach (IParameterSymbol parameter in rawParameters)
+                    {
+                        source.Append(", ").Append(TypeSyntax(parameter.Type)).Append(' ').Append(parameter.Name);
+                    }
+                    source.AppendLine(")");
+                    source.AppendLine("        {");
+
+                    string callResponse = "global::VoyageForge.Rpc.Transport.RpcResponse";
+                    switch (rawParameters.Count)
+                    {
+                        case 0:
+                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
+                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                                .AppendLine("\");");
+                            break;
+                        case 1:
+                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
+                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                                .Append("\", ").Append(rawParameters[0].Name).AppendLine(");");
+                            break;
+                        default:
+                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
+                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                                .Append("\", (").Append(string.Join(", ", rawParameters.Select(parameter => parameter.Name)))
+                                .AppendLine("));");
+                            break;
+                    }
+
+                    source.AppendLine("        }");
+                }
+
+                source.AppendLine("    }");
+            }
+
+            source.AppendLine("}");
+            context.AddSource("RpcGeneratedClients.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        }
+
+        /// <summary>生成 2 个及以上参数的 MemoryPack 请求 DTO（0/1 参数不生成）。</summary>
+        private static void EmitRequestDtos(GeneratorExecutionContext context, List<ServiceMethod> methods)
+        {
+            StringBuilder source = new StringBuilder(8000);
+            source.AppendLine("// <auto-generated />");
+            source.AppendLine("// 由 RpcGenerator 生成：2 个及以上参数的 RPC 请求 DTO（MemoryPack）。");
+            source.AppendLine("#pragma warning disable");
+            source.AppendLine("namespace VoyageForge.Rpc.Generated");
+            source.AppendLine("{");
+
+            foreach (ServiceMethod method in methods)
+            {
+                List<IParameterSymbol> rawParameters = method.Method.Parameters
+                    .Where(parameter => !IsCancellationToken(parameter.Type)).ToList();
+                if (rawParameters.Count < 2) continue;
+
+                // MemoryPack.Generator analyzer 在 Unity 中不可用时，DTO 先按普通类生成。
+                source.Append("    public partial class ").Append(method.Method.Name).AppendLine("RpcRequest");
+                source.AppendLine("    {");
+                foreach (IParameterSymbol parameter in rawParameters)
+                {
+                    source.Append("        public ").Append(TypeSyntax(parameter.Type)).Append(" ")
+                        .Append(PascalCase(parameter.Name)).AppendLine(" { get; set; }");
+                }
+
+                source.AppendLine("    }");
+            }
+
+            source.AppendLine("}");
+            context.AddSource("RpcGeneratedRequests.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        }
+
+        /// <summary>把参数列表转成 C# ValueTuple 类型文本：({T0} {n0}, {T1} {n1}, ...)。</summary>
+        private static string TupleType(List<IParameterSymbol> parameters)
+        {
+            StringBuilder builder = new StringBuilder("(");
+            for (int index = 0; index < parameters.Count; index++)
+            {
+                if (index > 0) builder.Append(", ");
+                builder.Append(TypeSyntax(parameters[index].Type)).Append(' ').Append(parameters[index].Name);
+            }
+
+            builder.Append(')');
+            return builder.ToString();
+        }
+
+        /// <summary>把参数名转 PascalCase（MemoryPack DTO 属性命名）。</summary>
+        private static string PascalCase(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            return char.ToUpperInvariant(name[0]) + name.Substring(1);
         }
 
         /// <summary>生成一个 MethodDescriptor 数组初始化项；参数类型按实际方法声明顺序保存。</summary>
@@ -436,17 +583,44 @@ namespace VoyageForge.Rpc.CodeGen
         private static void EmitDispatchCase(StringBuilder source, ServiceMethod method)
         {
             string contractType = TypeSyntax(method.ContractType);
-            List<string> arguments = new List<string>();
-            int rawIndex = 0;
+            List<IParameterSymbol> rawParameters = new List<IParameterSymbol>();
             foreach (IParameterSymbol parameter in method.Method.Parameters)
             {
-                if (IsCancellationToken(parameter.Type)) arguments.Add("ct");
-                else arguments.Add("(" + TypeSyntax(parameter.Type) + ")bound[" + rawIndex++ + "]");
+                if (!IsCancellationToken(parameter.Type)) rawParameters.Add(parameter);
+            }
+
+            List<string> arguments = new List<string>();
+            if (rawParameters.Count == 1)
+            {
+                // 规则 2：1 个参数直接反序列化参数类型，不生成 DTO。
+                arguments.Add("global::VoyageForge.Rpc.Transport.RpcPayload.Unpack<" + TypeSyntax(rawParameters[0].Type) + ">(payload)");
+            }
+            else if (rawParameters.Count >= 2)
+            {
+                // 规则 3：2+ 参数用 MemoryPack 原生 ValueTuple，不生成 DTO。
+                for (int index = 0; index < rawParameters.Count; index++)
+                {
+                    arguments.Add("parameters." + rawParameters[index].Name);
+                }
+            }
+
+            // CancellationToken 原样注入（在参数序列中的实际位置插入）。
+            if (method.Method.Parameters.Any(parameter => IsCancellationToken(parameter.Type)))
+            {
+                int tokenIndex = method.Method.Parameters.ToList().FindIndex(parameter => IsCancellationToken(parameter.Type));
+                if (tokenIndex < arguments.Count) arguments.Insert(tokenIndex, "ct");
+                else arguments.Add("ct");
             }
 
             string call = "((" + contractType + ")instance)." + method.Method.Name + "(" + string.Join(", ", arguments) + ")";
             source.Append("                case ").Append(method.Slot).AppendLine(":")
                 .AppendLine("                {");
+
+            if (rawParameters.Count >= 2)
+            {
+                source.Append("                    var parameters = global::VoyageForge.Rpc.Transport.RpcPayload.Unpack<")
+                    .Append(TupleType(rawParameters)).AppendLine(">(payload);");
+            }
 
             if (method.Method.ReturnsVoid)
                 source.Append("                    ").Append(call).AppendLine(";").AppendLine("                    return null;");

@@ -1,7 +1,8 @@
-{
+﻿{
   "name": "VoyageForge.Rpc.Executor.TcpSamples.PlayMode.Tests",
   "rootNamespace": "VoyageForge.Rpc.Samples.Tcp.Tests",
   "references": [
+    "MemoryPack.Core",
     "VoyageForge.Rpc.Executor.TcpSamples",
     "VoyageForge.Rpc.Transport"
   ],

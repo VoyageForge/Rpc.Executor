@@ -16,7 +16,7 @@ namespace VoyageForge.Rpc.Executor.Tests
 
             public int DispatchedSlot { get; private set; }
 
-            public object[] DispatchedArgs { get; private set; }
+            public byte[] DispatchedPayload { get; private set; }
 
             public bool TryResolve(string serviceName, string methodName, object[] args,
                 out MethodDescriptor descriptor)
@@ -31,10 +31,10 @@ namespace VoyageForge.Rpc.Executor.Tests
             descriptor = null;
             return false;
         }
-public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
+public Task<object> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct)
             {
                 DispatchedSlot = slot;
-                DispatchedArgs = boundArgs;
+                DispatchedPayload = payload;
                 return Task.FromResult<object>("dispatched");
             }
         }
@@ -60,14 +60,14 @@ public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs,
             FakeDispatcher dispatcher = new FakeDispatcher();
             GeneratedRpcInvoker invoker = new GeneratedRpcInvoker(dispatcher);
             MethodDescriptor descriptor = new MethodDescriptor { ServiceName = "tests", MethodName = "Run", Slot = 9 };
-            object[] args = { 1, "a" };
+            byte[] payload = { 1, 2 };
 
-            object result = invoker.InvokeAsync(descriptor, this, args, CancellationToken.None)
+            object result = invoker.InvokeAsync(descriptor, this, payload, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
             Assert.AreEqual("dispatched", result);
             Assert.AreEqual(9, dispatcher.DispatchedSlot);
-            Assert.AreSame(args, dispatcher.DispatchedArgs);
+            Assert.AreSame(payload, dispatcher.DispatchedPayload);
         }
 
         [Test]
@@ -76,7 +76,7 @@ public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs,
             GeneratedRpcInvoker invoker = new GeneratedRpcInvoker(new FakeDispatcher());
 
             Assert.Throws<ArgumentNullException>(() =>
-                invoker.InvokeAsync(null, this, Array.Empty<object>(), CancellationToken.None));
+                invoker.InvokeAsync(null, this, Array.Empty<byte>(), CancellationToken.None));
         }
     }
 }

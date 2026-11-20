@@ -1,7 +1,8 @@
-{
+﻿{
   "name": "VoyageForge.Rpc.Executor.TcpSamples",
   "rootNamespace": "VoyageForge.Rpc.Samples.Tcp",
   "references": [
+    "MemoryPack.Core",
     "VoyageForge.Rpc.Executor",
     "VoyageForge.Rpc.Transport"
   ],

@@ -39,115 +39,50 @@ namespace VoyageForge.Rpc.Samples
     }
 
 
-    /// <summary>
-    /// Sample 内的手写静态分发器。
-    /// 它让 Sample 在尚未构建 Source Generator DLL 时也能独立编译；业务项目仍可直接使用 CodeGen 自动生成版本。
-    /// </summary>
-    internal sealed class CalculatorSampleDispatcher : IGeneratedRpcDispatcher
-    {
-        private static readonly MethodDescriptor[] s_methods =
-        {
-            new MethodDescriptor
-            {
-                ServiceName = "calc", MethodName = "Add", MethodId = 0xC0B6E2146F1C044CUL,
-                Slot = 0, ParameterTypes = new[] { typeof(int), typeof(int) },
-                IsAsync = false, ResultType = typeof(int)
-            },
-            new MethodDescriptor
-            {
-                ServiceName = "calc", MethodName = "DivideAsync", MethodId = 0x20ED1E3292DDA7F4UL,
-                Slot = 1, ParameterTypes = new[] { typeof(double), typeof(double), typeof(CancellationToken) },
-                IsAsync = true, ResultType = typeof(double)
-            }
-        };
-
-        /// <summary>按服务名、方法名和不含 CancellationToken 的参数数量查找 Sample 方法。</summary>
-        public bool TryResolve(string serviceName, string methodName, object[] args, out MethodDescriptor descriptor)
-        {
-            int rawCount = args == null ? 0 : args.Length;
-            for (int i = 0; i < s_methods.Length; i++)
-            {
-                MethodDescriptor candidate = s_methods[i];
-                int expected = candidate.ParameterTypes.Count(type => type != typeof(CancellationToken));
-                if (candidate.ServiceName == serviceName && candidate.MethodName == methodName && expected == rawCount)
-                {
-                    descriptor = candidate;
-                    return true;
-                }
-            }
-            descriptor = null;
-            return false;
-        }
-
-        /// <summary>通过固定 Slot 静态调用 Sample 的业务接口，不使用 MethodInfo.Invoke。</summary>
-                /// <summary>Mirror 式：按 MethodId 命中；示例/测试不使用，返回 false。</summary>
-        public bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor)
-        {
-            descriptor = null;
-            return false;
-        }
-public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
-        {
-            ICalculator calculator = instance as ICalculator;
-            if (calculator == null) throw new InvalidOperationException("服务实例不是 ICalculator。");
-            switch (slot)
-            {
-                case 0:
-                    return Task.FromResult<object>(calculator.Add((int)boundArgs[0], (int)boundArgs[1]));
-                case 1:
-                    return DivideAsync(calculator, boundArgs, ct);
-                default:
-                    throw new InvalidOperationException("未知的 Calculator Sample Slot：" + slot);
-            }
-        }
-
-        /// <summary>异步分发辅助方法，将框架注入的取消令牌传入业务接口。</summary>
-        private static async Task<object> DivideAsync(ICalculator calculator, object[] boundArgs, CancellationToken ct)
-        {
-            return await calculator.DivideAsync((double)boundArgs[0], (double)boundArgs[1], ct);
-        }
-    }
-
-
     /// <summary>Sample 的组装入口，可由 MonoBehaviour、Editor 按钮或测试代码调用。</summary>
     public static class CalculatorSample
     {
         /// <summary>
         /// 构建一个可执行 calc 服务的 RpcExecutor。
-        /// 这里使用手写静态分发器，避免 Sample 在尚未部署生成器 DLL 时出现缺失类型。
+        /// 分发器由 RpcGenerator 生成（Rpc.Executor.CodeGen），Sample 不再手写。
         /// </summary>
         public static RpcExecutor CreateExecutor()
         {
             ServiceRegistry registry = new ServiceRegistry();
             registry.Register<ICalculator>(new Calculator());
 
-            // Resolver 负责选择方法描述符；Invoker 负责按 Slot 调用。两者共用同一个静态分发器实例。
-            IGeneratedRpcDispatcher dispatcher = new CalculatorSampleDispatcher();
+            // 生成器产物：描述符表 + switch(slot) 调用；两个适配器共用同一实例。
+            IGeneratedRpcDispatcher dispatcher = new VoyageForge.Rpc.Generated.RpcGeneratedDispatcher();
             return new RpcExecutor(
                 registry,
                 new GeneratedMethodResolver(dispatcher),
-                new GeneratedRpcInvoker(dispatcher));
+                new GeneratedRpcInvoker(dispatcher))
+            {
+                // 生成器名称表：MethodId → "calc.Add"，仅用于诊断，不参与网络传输。
+                MethodNameResolver = VoyageForge.Rpc.Generated.RpcMethodNames.TryGetName
+            };
         }
 
         /// <summary>执行需求文档中的两个示例：Add(3,4)=7、DivideAsync(10,4)=2.5。</summary>
         public static async Task RunAsync()
         {
             RpcExecutor executor = CreateExecutor();
-            RpcResponse add = await executor.ExecuteAsync(new RpcRequest
+
+            // 客户端只给 ServiceName + MethodName；MethodId 由 RpcExecutor 计算并缓存。
+            RpcResponse<int> add = await executor.ExecuteAsync<int>(new RpcRequest
             {
                 ServiceName = "calc",
                 MethodName = "Add",
-                Parameters = new object[] { 3, 4 }
+                Payload = RpcPayload.Pack(new object[] { 3, 4 })
             });
-            UnityEngine.Debug.Log("3 + 4 = " + add.Result);
+            UnityEngine.Debug.Log("3 + 4 = " + add.Data);
 
-            RpcResponse divide = await executor.ExecuteAsync(new RpcRequest
+            RpcResponse<double> divide = await executor.ExecuteAsync<double>(new RpcRequest
             {
                 ServiceName = "calc",
                 MethodName = "DivideAsync",
-                Parameters = new object[] { 10.0, 4.0 }
+                Payload = RpcPayload.Pack(new object[] { 10.0, 4.0 })
             });
-            UnityEngine.Debug.Log("10 / 4 = " + divide.Result);
-        }
-    }
+            UnityEngine.Debug.Log("10 / 4 = " + divide.Data);
+        }    }
 }

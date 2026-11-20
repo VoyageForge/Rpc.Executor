@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rpc.Executor.CodeGen")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+689d1aac3b569c84bab455737e49729a6cbfbfae")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f4777d66ff05345cbd64b0a3406b84cac863f8d6")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rpc.Executor.CodeGen")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rpc.Executor.CodeGen")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

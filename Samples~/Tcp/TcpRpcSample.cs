@@ -58,13 +58,13 @@ namespace VoyageForge.Rpc.Samples.Tcp
             descriptor = null;
             return false;
         }
-public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs, CancellationToken ct)
+public Task<object> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct)
         {
             if (slot != 0) throw new InvalidOperationException("未知的 TCP Sample Slot：" + slot);
             ITcpCalculator calculator = instance as ITcpCalculator;
             if (calculator == null) throw new InvalidOperationException("服务实例不是 ITcpCalculator。");
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult<object>(calculator.Add((int)boundArgs[0], (int)boundArgs[1]));
+            return Task.FromResult<object>(calculator.Add(VoyageForge.Rpc.Transport.RpcPayload.ReadArgument<int>(payload, 0), (int)payload[1]));
         }
     }
 
@@ -125,7 +125,7 @@ public Task<object> DispatchAsync(int slot, object instance, object[] boundArgs,
             {
                 ServiceName = "tcp.calc",
                 MethodName = "Add",
-                Parameters = new object[] { 3, 4 }
+                Payload = RpcPayload.Pack(new object[] {  3, 4  })
             }, ct);
 
             if (!response.Success)

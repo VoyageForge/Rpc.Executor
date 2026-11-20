@@ -85,9 +85,9 @@ namespace VoyageForge.Rpc.Executor.Tests
             RpcResponse failed = executor.ExecuteAsync(new RpcRequest
             {
                 ServiceName = "tests.counter",
-                MethodName = "Increment",
+                MethodName = "Missing",
                 RequestId = 13,
-                Parameters = new object[] { "unexpected" }
+                Payload = Array.Empty<byte>()
             }).GetAwaiter().GetResult();
 
             RpcResponse retried = executor.ExecuteAsync(CreateRequest(13)).GetAwaiter().GetResult();

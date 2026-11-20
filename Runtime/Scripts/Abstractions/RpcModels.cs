@@ -31,7 +31,7 @@ namespace VoyageForge.Rpc.Executor.Abstractions
         public int Slot { get; set; }
 
         /// <summary>
-        /// 方法真实参数类型，包含 CancellationToken（如果方法声明了它）。RpcRequest.Parameters 不含此参数。
+        /// 方法真实参数类型，包含 CancellationToken（如果方法声明了它）。RpcRequest.Payload 不含此参数。
         /// </summary>
         public Type[] ParameterTypes { get; set; }
 

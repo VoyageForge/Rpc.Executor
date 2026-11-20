@@ -33,7 +33,19 @@ namespace VoyageForge.Rpc.Executor
         /// <summary>构造时复制的拦截器快照，调用过程中顺序不会被外部改动。</summary>
         private readonly IReadOnlyList<IRpcInterceptor> _interceptors;
 
+        /// <summary>
+        /// MethodId → 可读名称的解析器（由生成器 RpcMethodNames 注入）；默认 null 表示无名称表。
+        /// </summary>
+        public Func<ulong, string> MethodNameResolver { get; set; }
+
         /// <summary>是否向 RpcResponse.Detail 暴露完整异常堆栈；默认 false。</summary>
+        /// <summary>(ServiceName, MethodName) → MethodId 缓存：服务端计算并复用，客户端不需要知道 MethodId。</summary>
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ulong> _methodIdCache =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, ulong>(StringComparer.Ordinal);
+
+        /// <summary>MethodId 计算器（与生成器/调用端同一 FNV-1a 64 规范）。</summary>
+        private readonly Fnv1A64MethodIdProvider _methodIdProvider = new Fnv1A64MethodIdProvider();
+
         public bool ExposeExceptionDetail { get; set; }
 
         /// <summary>创建 RPC 执行器并注入所有必要协作者。</summary>
@@ -95,6 +107,50 @@ namespace VoyageForge.Rpc.Executor
             }
         }
 
+        /// <summary>
+        /// 泛型执行：返回 RpcResponse&lt;T&gt;，业务代码直接拿强类型 Data，无需再转换 Result。
+        /// </summary>
+        public async Task<RpcResponse<TResponse>> ExecuteAsync<TResponse>(RpcRequest request,
+            CancellationToken ct = default(CancellationToken))
+        {
+            RpcResponse baseResponse = await ExecuteAsync(request, ct).ConfigureAwait(false);
+
+            RpcResponse<TResponse> typed = new RpcResponse<TResponse>
+            {
+                Success = baseResponse.Success,
+                Error = baseResponse.Error,
+                RequestId = baseResponse.RequestId,
+                MethodId = baseResponse.MethodId,
+                Detail = baseResponse.Detail
+            };
+
+            if (baseResponse.Success && baseResponse.Result != null)
+            {
+                typed.Data = baseResponse.Result is TResponse value
+                    ? value
+                    : (TResponse)Convert.ChangeType(baseResponse.Result, typeof(TResponse));
+            }
+
+            return typed;
+        }
+
+        /// <summary>按描述符参数类型计算 MethodId（排除 CancellationToken）。</summary>
+        private ulong ComputeMethodId(string serviceName, string methodName, MethodDescriptor method)
+        {
+            Type[] parameterTypes = method.ParameterTypes ?? Type.EmptyTypes;
+            string[] argTypes = new string[parameterTypes.Length];
+            int count = 0;
+            for (int index = 0; index < parameterTypes.Length; index++)
+            {
+                Type type = parameterTypes[index];
+                if (type == typeof(CancellationToken)) continue;
+                argTypes[count++] = type.FullName ?? type.Name;
+            }
+
+            if (count != argTypes.Length) Array.Resize(ref argTypes, count);
+            return _methodIdProvider.GetMethodId(serviceName, methodName, argTypes);
+        }
+
         /// <summary>执行核心步骤：取消检查、查服务、选方法、绑定参数、静态调用、包装结果。</summary>
         private async Task<RpcResponse> ExecuteCoreAsync(RpcRequest request, CancellationToken ct)
         {
@@ -104,10 +160,18 @@ namespace VoyageForge.Rpc.Executor
                 ct.ThrowIfCancellationRequested();
 
                 // 2. 先按服务名查找实例。未注册属于框架错误，不是业务异常。
-                if (!_services.TryGet(request.ServiceName, out object instance))
-                    return RpcResponse.Fail("SERVICE_NOT_FOUND", "服务不存在：" + request.ServiceName);
+                // 默认只传 MethodId：名称缺失时从生成器名称表还原，便于诊断。
+                string resolvedName = request.MethodName ?? (MethodNameResolver != null ? MethodNameResolver(request.MethodId) : null);
+                string resolvedService = request.ServiceName;
+                if (resolvedService == null && resolvedName != null)
+                {
+                    int dot = resolvedName.IndexOf('.');
+                    resolvedService = dot > 0 ? resolvedName.Substring(0, dot) : resolvedName;
+                }
 
-                object[] rawArguments = request.Parameters ?? Array.Empty<object>();
+                if (!_services.TryGet(resolvedService, out object instance))
+                    return RpcResponse.Fail("SERVICE_NOT_FOUND", "服务不存在：" + (resolvedService ?? "<MethodId=0x" + request.MethodId.ToString("X16") + ">"));
+
 
                 // 3. 生成式解析器按服务、方法和原始值选择唯一重载。方法实际调用仍在后续的 Invoker 中完成。
                 MethodDescriptor method;
@@ -115,8 +179,8 @@ namespace VoyageForge.Rpc.Executor
                 {
                     // Mirror 式：MethodId 优先（生成器 switch 命中），为 0 时回退字符串。
                     bool resolved = request.MethodId != 0
-                        ? _resolver.TryResolve(request.MethodId, rawArguments, out method)
-                        : _resolver.TryResolve(request.ServiceName, request.MethodName, rawArguments, out method);
+                        ? _resolver.TryResolve(request.MethodId, Array.Empty<object>(), out method)
+                        : _resolver.TryResolve(request.ServiceName, request.MethodName, Array.Empty<object>(), out method);
                     if (!resolved)
                         return RpcResponse.Fail("METHOD_NOT_FOUND",
                             "方法不存在或参数无法匹配：" + request.ServiceName + "." + request.MethodName +
@@ -127,45 +191,20 @@ namespace VoyageForge.Rpc.Executor
                     return RpcResponse.Fail("METHOD_AMBIGUOUS", exception.Message);
                 }
 
-                // 4. 描述符参数类型包含 CancellationToken；请求参数数组不包含它，因此先计算真实输入数量。
-                Type[] parameterTypes = method.ParameterTypes ?? Type.EmptyTypes;
-                int expectedRawCount = parameterTypes.Count(type => type != typeof(CancellationToken));
-                if (rawArguments.Length != expectedRawCount)
+                // 3.5 MethodId：客户端只给 ServiceName + MethodName，这里计算并缓存；请求里已带则直接用。
+                ulong methodId = request.MethodId;
+                if (methodId == 0)
                 {
-                    return RpcResponse.Fail("ARGUMENT_BIND_ERROR",
-                        "参数数量不正确，期望 " + expectedRawCount + "，实际 " + rawArguments.Length);
-                }
-
-                // 5. 创建与真实 C# 方法参数顺序完全一致的数组。遇到 CancellationToken 时插入同一个 ct；
-                // 其他参数从原始请求中按序取出并交给 Converter。若任意一项转换失败，业务方法不会被执行。
-                object[] boundArguments = new object[parameterTypes.Length];
-                int rawIndex = 0;
-                for (int parameterIndex = 0; parameterIndex < parameterTypes.Length; parameterIndex++)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    Type targetType = parameterTypes[parameterIndex];
-                    if (targetType == typeof(CancellationToken))
-                    {
-                        boundArguments[parameterIndex] = ct;
-                        continue;
-                    }
-
-                    if (!_converter.TryConvert(rawArguments[rawIndex], targetType,
-                            out object converted, out string error))
-                    {
-                        return RpcResponse.Fail("ARGUMENT_BIND_ERROR",
-                            "参数 " + rawIndex + " 转换为 " + targetType.FullName + " 失败：" + error);
-                    }
-
-                    boundArguments[parameterIndex] = converted;
-                    rawIndex++;
+                    string cacheKey = request.ServiceName + "\u001F" + request.MethodName;
+                    methodId = _methodIdCache.GetOrAdd(cacheKey,
+                        _ => ComputeMethodId(request.ServiceName, request.MethodName, method));
                 }
 
                 // 6. 在真正进入业务方法前再次检查取消，避免绑定期间被取消的请求仍继续执行。
                 ct.ThrowIfCancellationRequested();
 
                 // 7. Invoker 通过 Slot 进入生成代码；同步、Task、Task<T> 统一成 Task<object>。
-                object result = await _invoker.InvokeAsync(method, instance, boundArguments, ct).ConfigureAwait(false);
+                object result = await _invoker.InvokeAsync(method, instance, request.Payload, ct).ConfigureAwait(false);
 
                 // 8. 方法执行期间也可能取消；检查后再返回成功响应。
                 ct.ThrowIfCancellationRequested();

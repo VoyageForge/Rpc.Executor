@@ -1,7 +1,8 @@
-{
+﻿{
   "name": "VoyageForge.Rpc.Executor.Tests.EditMode",
   "rootNamespace": "VoyageForge.Rpc.Executor.Tests",
   "references": [
+    "MemoryPack.Core",
     "VoyageForge.Rpc.Executor",
     "VoyageForge.Rpc.Transport",
     "UniTask",

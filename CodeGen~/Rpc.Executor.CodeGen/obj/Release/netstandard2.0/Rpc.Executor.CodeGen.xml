@@ -162,6 +162,21 @@
             注意：这里生成的是 C# 源码文本，不是在编译期实例化对象或创建动态程序集。
             </summary>
         </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitClients(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
+            <summary>
+            生成调用端代理：ServicesMap 扩展方法，参数顺序与契约方法一致。
+            0 参数不传 payload；1 参数直接传；2+ 参数组合为 ValueTuple（与 dispatch 的反序列化对应）。
+            </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitRequestDtos(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
+            <summary>生成 2 个及以上参数的 MemoryPack 请求 DTO（0/1 参数不生成）。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.TupleType(System.Collections.Generic.List{Microsoft.CodeAnalysis.IParameterSymbol})">
+            <summary>把参数列表转成 C# ValueTuple 类型文本：({T0} {n0}, {T1} {n1}, ...)。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.PascalCase(System.String)">
+            <summary>把参数名转 PascalCase（MemoryPack DTO 属性命名）。</summary>
+        </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitDescriptor(System.Text.StringBuilder,VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod)">
             <summary>生成一个 MethodDescriptor 数组初始化项；参数类型按实际方法声明顺序保存。</summary>
         </member>

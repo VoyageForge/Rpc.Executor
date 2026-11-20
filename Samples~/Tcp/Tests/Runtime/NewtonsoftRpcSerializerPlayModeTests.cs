@@ -48,8 +48,8 @@ namespace VoyageForge.Rpc.Samples.Tcp.Tests
             _server = server;
             server.OnRequestAsync += (request, serverToken) =>
             {
-                string text = request.Parameters != null && request.Parameters.Length > 0
-                    ? request.Parameters[0] as string
+                string text = RpcPayload.Unpack<object[]>(request.Payload).Length > 0
+                    ? RpcPayload.Unpack<object[]>(request.Payload)[0] as string
                     : null;
                 return Task.FromResult(RpcResponse.Ok(text));
             };
@@ -71,7 +71,7 @@ namespace VoyageForge.Rpc.Samples.Tcp.Tests
                 {
                     ServiceName = "tests.serializer",
                     MethodName = "Echo",
-                    Parameters = new object[] { expected[index] }
+                    Payload = RpcPayload.Pack( expected[index] )
                 };
                 TcpRpcClientTransport client = new TcpRpcClientTransport(
                     "127.0.0.1", server.LocalEndPoint.Port, serializer, maxFrameBytes: 4 * 1024 * 1024);

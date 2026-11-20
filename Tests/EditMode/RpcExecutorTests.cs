@@ -42,16 +42,16 @@ namespace VoyageForge.Rpc.Executor.Tests
             });
 
             FakeInvoker localInvoker = null;
-            localInvoker = new FakeInvoker((method, instance, boundArgs, ct) =>
+            localInvoker = new FakeInvoker((method, instance, payload, ct) =>
             {
                 if (method.MethodName == "Add")
                 {
-                    return Task.FromResult<object>((int)boundArgs[0] + (int)boundArgs[1]);
+                    return Task.FromResult<object>(RpcPayload.ReadArgument<int>(payload, 0) + RpcPayload.ReadArgument<int>(payload, 1));
                 }
 
                 if (method.MethodName == "AddWithToken")
                 {
-                    return Task.FromResult<object>((int)boundArgs[0]);
+                    return Task.FromResult<object>(RpcPayload.ReadArgument<int>(payload, 0));
                 }
 
                 return Task.FromResult<object>(null);
@@ -67,7 +67,7 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 ServiceName = "tests.echo",
                 MethodName = methodName,
-                Parameters = parameters
+                Payload = RpcPayload.Pack<object[]>(parameters),
             };
         }
 
@@ -77,7 +77,7 @@ namespace VoyageForge.Rpc.Executor.Tests
             RpcExecutor executor = CreateExecutor(out _, out _);
 
             RpcResponse response = executor.ExecuteAsync(
-                CreateRequest("Add", "1", "2")).GetAwaiter().GetResult();
+                CreateRequest("Add", 1, 2)).GetAwaiter().GetResult();
 
             Assert.IsTrue(response.Success);
             Assert.AreEqual(3, response.Result);
@@ -92,7 +92,7 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 ServiceName = "tests.missing",
                 MethodName = "Add",
-                Parameters = new object[] { 1, 2 }
+                Payload = RpcPayload.Pack(new object[] { 1, 2 })
             }).GetAwaiter().GetResult();
 
             Assert.IsFalse(response.Success);
@@ -112,36 +112,12 @@ namespace VoyageForge.Rpc.Executor.Tests
         }
 
         [Test]
-        public void 参数数量不符返回绑定错误()
-        {
-            RpcExecutor executor = CreateExecutor(out _, out _);
-
-            RpcResponse response = executor.ExecuteAsync(
-                CreateRequest("Add", 1)).GetAwaiter().GetResult();
-
-            Assert.IsFalse(response.Success);
-            Assert.AreEqual("ARGUMENT_BIND_ERROR", response.Error.Code);
-        }
-
-        [Test]
-        public void 参数转换失败返回绑定错误()
-        {
-            RpcExecutor executor = CreateExecutor(out _, out _);
-
-            RpcResponse response = executor.ExecuteAsync(
-                CreateRequest("Add", "not-a-number", 2)).GetAwaiter().GetResult();
-
-            Assert.IsFalse(response.Success);
-            Assert.AreEqual("ARGUMENT_BIND_ERROR", response.Error.Code);
-        }
-
-        [Test]
         public void CancellationToken注入后不占请求参数()
         {
             RpcExecutor executor = CreateExecutor(out _, out _);
 
             RpcResponse response = executor.ExecuteAsync(
-                CreateRequest("AddWithToken", "5")).GetAwaiter().GetResult();
+                CreateRequest("AddWithToken", 5)).GetAwaiter().GetResult();
 
             Assert.IsTrue(response.Success);
             Assert.AreEqual(5, response.Result);

@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -418,7 +418,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 563900801}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 531c4db8af98f224b8edf88f74ca6a0c, type: 3}
+  m_Script: {fileID: 11500000, guid: 40295f599856ebe44898ab70a0b1e5bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &844425514
