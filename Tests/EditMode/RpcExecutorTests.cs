@@ -46,15 +46,15 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 if (method.MethodName == "Add")
                 {
-                    return Task.FromResult<object>(RpcPayload.ReadArgument<int>(payload, 0) + RpcPayload.ReadArgument<int>(payload, 1));
+                    return Task.FromResult(RpcPayload.Pack(RpcPayload.ReadArgument<int>(payload, 0) + RpcPayload.ReadArgument<int>(payload, 1)));
                 }
 
                 if (method.MethodName == "AddWithToken")
                 {
-                    return Task.FromResult<object>(RpcPayload.ReadArgument<int>(payload, 0));
+                    return Task.FromResult(RpcPayload.Pack(RpcPayload.ReadArgument<int>(payload, 0)));
                 }
 
-                return Task.FromResult<object>(null);
+                return Task.FromResult(Array.Empty<byte>());
             });
             invoker = localInvoker;
 
@@ -80,7 +80,7 @@ namespace VoyageForge.Rpc.Executor.Tests
                 CreateRequest("Add", 1, 2)).GetAwaiter().GetResult();
 
             Assert.IsTrue(response.Success);
-            Assert.AreEqual(3, response.Result);
+            Assert.AreEqual(3, RpcPayload.Unpack<int>(response.Payload));
         }
 
         [Test]
@@ -120,7 +120,7 @@ namespace VoyageForge.Rpc.Executor.Tests
                 CreateRequest("AddWithToken", 5)).GetAwaiter().GetResult();
 
             Assert.IsTrue(response.Success);
-            Assert.AreEqual(5, response.Result);
+            Assert.AreEqual(5, RpcPayload.Unpack<int>(response.Payload));
         }
 
         [Test]

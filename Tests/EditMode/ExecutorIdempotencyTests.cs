@@ -35,7 +35,7 @@ namespace VoyageForge.Rpc.Executor.Tests
             FakeInvoker invoker = new FakeInvoker((method, instance, boundArgs, ct) =>
             {
                 service.Calls++;
-                return Task.FromResult<object>(service.Calls);
+                return Task.FromResult(RpcPayload.Pack(service.Calls));
             });
 
             return new RpcExecutor(registry, resolver, invoker, new JsonArgumentConverter(), null, cache);

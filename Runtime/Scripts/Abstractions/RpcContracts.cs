@@ -40,7 +40,7 @@ namespace VoyageForge.Rpc.Executor.Abstractions
     public interface IInvoker
     {
         /// <summary>接收已经完成参数绑定的数组，将同步结果、Task 和 Task&lt;T&gt; 统一转换成 Task&lt;object&gt;。</summary>
-        Task<object> InvokeAsync(MethodDescriptor method, object instance, byte[] payload, CancellationToken ct);
+        Task<byte[]> InvokeAsync(MethodDescriptor method, object instance, byte[] payload, CancellationToken ct);
     }
 
     /// <summary>RPC 拦截器接口，多个拦截器按注册顺序组成洋葱模型。</summary>

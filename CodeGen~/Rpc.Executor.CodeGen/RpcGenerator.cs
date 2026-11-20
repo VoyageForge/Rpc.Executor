@@ -38,7 +38,12 @@ namespace VoyageForge.Rpc.CodeGen
             "VoyageForge.RPC", DiagnosticSeverity.Error, true,
             "0.0.4 支持同步方法、void、Task 和 Task<T>；不支持开放泛型、ref/out/in 和 ValueTask。");
 
-        /// <summary>RPC003：服务声明不是有效的非泛型 class/interface，或服务名为空。</summary>
+        /// <summary>RPC004：契约返回值没有用 RpcResponse 包裹。</summary>
+    private static readonly DiagnosticDescriptor UnwrappedReturnType = new DiagnosticDescriptor(
+        "RPC004", "RPC 返回值未用 RpcResponse 包裹", "RPC 方法“{0}”的返回值必须是 RpcResponse<T> 或 Task<RpcResponse<T>>/RpcResponse/Task/void：{1}",
+        "VoyageForge.Rpc.Generator", DiagnosticSeverity.Error, true);
+
+    /// <summary>RPC003：服务声明不是有效的非泛型 class/interface，或服务名为空。</summary>
         private static readonly DiagnosticDescriptor InvalidService = new DiagnosticDescriptor(
             "RPC003", "RPC 服务声明无效", "RPC 服务声明无效：{0}",
             "VoyageForge.RPC", DiagnosticSeverity.Error, true,
@@ -350,7 +355,8 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("                global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor candidate = s_methods[i];")
                 .AppendLine("                if (!global::System.String.Equals(candidate.ServiceName, serviceName, global::System.StringComparison.Ordinal) ||")
                 .AppendLine("                    !global::System.String.Equals(candidate.MethodName, methodName, global::System.StringComparison.Ordinal)) continue;")
-                .AppendLine("                if (GetRawArgumentCount(candidate.ParameterTypes) != raw.Length) continue;")
+                .AppendLine("                if (raw.Length > 0 && GetRawArgumentCount(candidate.ParameterTypes) != raw.Length) continue;")
+                .AppendLine("                if (raw.Length == 0) { descriptor = candidate; return true; }")
                 .AppendLine("                int score = GetCandidateScore(raw, candidate.ParameterTypes);")
                 .AppendLine("                if (score < 0) continue;")
                 .AppendLine("                if (score > bestScore) { descriptor = candidate; bestScore = score; ambiguous = false; }")
@@ -374,6 +380,7 @@ namespace VoyageForge.Rpc.CodeGen
                     .AppendLine("                    global::VoyageForge.Rpc.Executor.Abstractions.MethodDescriptor candidate = s_methods[" + method.Slot + "];")
                     .AppendLine("                    if (candidate.MethodId != methodId) return false;")
                     .AppendLine("                    if (GetRawArgumentCount(candidate.ParameterTypes) != raw.Length) return false;")
+                .AppendLine("                    if (raw.Length == 0) { descriptor = candidate; return true; }")
                     .AppendLine("                    if (GetCandidateScore(raw, candidate.ParameterTypes) < 0) return false;")
                     .AppendLine("                    descriptor = candidate;")
                     .AppendLine("                    return true;")
@@ -418,7 +425,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .AppendLine("            return -1;")
                 .AppendLine("        }")
                 .AppendLine("        /// <summary>根据 Slot 执行编译期写出的强类型调用。</summary>")
-                .AppendLine("        public async global::System.Threading.Tasks.Task<object> DispatchAsync(int slot, object instance, byte[] payload, global::System.Threading.CancellationToken ct)")
+                .AppendLine("        public async global::System.Threading.Tasks.Task<byte[]> DispatchAsync(int slot, object instance, byte[] payload, global::System.Threading.CancellationToken ct)")
                 .AppendLine("        {")
                 .AppendLine("            switch (slot)")
                 .AppendLine("            {");
@@ -460,10 +467,11 @@ namespace VoyageForge.Rpc.CodeGen
                 {
                     List<IParameterSymbol> rawParameters = method.Method.Parameters
                         .Where(parameter => !IsCancellationToken(parameter.Type)).ToList();
-                    string resultType = method.ResultType != null && method.ResultType.SpecialType != SpecialType.System_Void
-                        ? TypeSyntax(method.ResultType)
-                        : "object";
-                    string returnType = "global::VoyageForge.Rpc.Transport.RpcResponse<" + resultType + ">";
+                    ITypeSymbol businessType = ExtractBusinessType(method.ResultType);
+                    string resultType = businessType != null ? TypeSyntax(businessType) : "object";
+                    string returnType = businessType != null
+                        ? "global::VoyageForge.Rpc.Transport.RpcResponse<" + resultType + ">"
+                        : "global::VoyageForge.Rpc.Transport.RpcResponse<object>";
 
                     source.Append("        /// <summary>").Append(XmlEscape(method.ServiceName + "." + method.Method.Name)).AppendLine("</summary>");
                     source.Append("        public static global::System.Threading.Tasks.Task<").Append(returnType)
@@ -477,24 +485,30 @@ namespace VoyageForge.Rpc.CodeGen
                     source.AppendLine("        {");
 
                     string callResponse = "global::VoyageForge.Rpc.Transport.RpcResponse";
-                    switch (rawParameters.Count)
+                    if (rawParameters.Count == 0)
                     {
-                        case 0:
-                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
-                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
-                                .AppendLine("\");");
-                            break;
-                        case 1:
-                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
-                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
-                                .Append("\", ").Append(rawParameters[0].Name).AppendLine(");");
-                            break;
-                        default:
-                            source.Append("            return api.CallAsync<").Append(TypeSyntax(method.ResultType)).Append(">(\"")
-                                .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
-                                .Append("\", (").Append(string.Join(", ", rawParameters.Select(parameter => parameter.Name)))
-                                .AppendLine("));");
-                            break;
+                        source.Append("            return api.CallAsync<").Append(resultType).Append(">(\"")
+                            .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                            .AppendLine("\");");
+                    }
+                    else if (rawParameters.Count == 1)
+                    {
+                        // 1 参数：直接 Pack 参数类型（值类型泛型，无装箱）。
+                        source.Append("            byte[] payload = global::VoyageForge.Rpc.Transport.RpcPayload.Pack(")
+                            .Append(rawParameters[0].Name).AppendLine(");");
+                        source.Append("            return api.CallAsync<").Append(resultType).Append(">(\"")
+                            .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                            .AppendLine("\", payload);");
+                    }
+                    else
+                    {
+                        // 2+ 参数：Pack 元组（值类型泛型，无装箱）。
+                        source.Append("            byte[] payload = global::VoyageForge.Rpc.Transport.RpcPayload.Pack((")
+                            .Append(string.Join(", ", rawParameters.Select(parameter => parameter.Name)))
+                            .AppendLine("));");
+                        source.Append("            return api.CallAsync<").Append(resultType).Append(">(\"")
+                            .Append(CSharpEscape(method.ServiceName)).Append("\", \"").Append(CSharpEscape(method.Method.Name))
+                            .AppendLine("\", payload);");
                     }
 
                     source.AppendLine("        }");
@@ -512,7 +526,7 @@ namespace VoyageForge.Rpc.CodeGen
         {
             StringBuilder source = new StringBuilder(8000);
             source.AppendLine("// <auto-generated />");
-            source.AppendLine("// 由 RpcGenerator 生成：2 个及以上参数的 RPC 请求 DTO（MemoryPack）。");
+            source.AppendLine("// 由 RpcGenerator 生成：全部参数模式的 MemoryPack RPC 请求 DTO。");
             source.AppendLine("#pragma warning disable");
             source.AppendLine("namespace VoyageForge.Rpc.Generated");
             source.AppendLine("{");
@@ -521,13 +535,15 @@ namespace VoyageForge.Rpc.CodeGen
             {
                 List<IParameterSymbol> rawParameters = method.Method.Parameters
                     .Where(parameter => !IsCancellationToken(parameter.Type)).ToList();
-                if (rawParameters.Count < 2) continue;
+                if (rawParameters.Count == 0) continue;   // 0 参数：空 payload，无 DTO
 
-                // MemoryPack.Generator analyzer 在 Unity 中不可用时，DTO 先按普通类生成。
+                source.AppendLine("    [global::MemoryPack.MemoryPackable]");
                 source.Append("    public partial class ").Append(method.Method.Name).AppendLine("RpcRequest");
                 source.AppendLine("    {");
-                foreach (IParameterSymbol parameter in rawParameters)
+                for (int index = 0; index < rawParameters.Count; index++)
                 {
+                    IParameterSymbol parameter = rawParameters[index];
+                    source.Append("        [global::MemoryPack.MemoryPackOrder(").Append(index).AppendLine(")]");
                     source.Append("        public ").Append(TypeSyntax(parameter.Type)).Append(" ")
                         .Append(PascalCase(parameter.Name)).AppendLine(" { get; set; }");
                 }
@@ -551,6 +567,24 @@ namespace VoyageForge.Rpc.CodeGen
 
             builder.Append(')');
             return builder.ToString();
+        }
+
+        /// <summary>
+        /// 从契约返回类型提取业务类型：RpcResponse&lt;T&gt; / Task&lt;RpcResponse&lt;T&gt;&gt; → T；
+        /// RpcResponse / Task → object；其他返回类型视为错误（契约必须用 RpcResponse 包裹）。
+        /// </summary>
+        private static ITypeSymbol ExtractBusinessType(ITypeSymbol returnType)
+        {
+            ITypeSymbol current = returnType;
+            if (current is INamedTypeSymbol named && named.Name == "Task" && named.TypeArguments.Length == 1)
+            {
+                current = named.TypeArguments[0];
+            }
+
+            if (!(current is INamedTypeSymbol responseType)) return null;
+            if (responseType.Name != "RpcResponse" ||
+                responseType.ContainingNamespace.ToDisplayString() != "VoyageForge.Rpc.Transport") return null;
+            return responseType.TypeArguments.Length == 1 ? responseType.TypeArguments[0] : null;
         }
 
         /// <summary>把参数名转 PascalCase（MemoryPack DTO 属性命名）。</summary>
@@ -592,12 +626,12 @@ namespace VoyageForge.Rpc.CodeGen
             List<string> arguments = new List<string>();
             if (rawParameters.Count == 1)
             {
-                // 规则 2：1 个参数直接反序列化参数类型，不生成 DTO。
+                // 1 参数：直接反序列化参数类型（无 DTO）。
                 arguments.Add("global::VoyageForge.Rpc.Transport.RpcPayload.Unpack<" + TypeSyntax(rawParameters[0].Type) + ">(payload)");
             }
             else if (rawParameters.Count >= 2)
             {
-                // 规则 3：2+ 参数用 MemoryPack 原生 ValueTuple，不生成 DTO。
+                // 2+ 参数：MemoryPack 原生 ValueTuple（无 DTO）。
                 for (int index = 0; index < rawParameters.Count; index++)
                 {
                     arguments.Add("parameters." + rawParameters[index].Name);
@@ -623,13 +657,27 @@ namespace VoyageForge.Rpc.CodeGen
             }
 
             if (method.Method.ReturnsVoid)
-                source.Append("                    ").Append(call).AppendLine(";").AppendLine("                    return null;");
+            {
+                source.Append("                    ").Append(call).AppendLine(";");
+                source.AppendLine("                    return global::System.Array.Empty<byte>();");
+            }
             else if (IsNonGenericTask(method.Method.ReturnType))
-                source.Append("                    await ").Append(call).AppendLine(".ConfigureAwait(false);").AppendLine("                    return null;");
+            {
+                source.Append("                    await ").Append(call).AppendLine(".ConfigureAwait(false);");
+                source.AppendLine("                    return global::System.Array.Empty<byte>();");
+            }
             else if (IsGenericTask(method.Method.ReturnType))
-                source.Append("                    return await ").Append(call).AppendLine(".ConfigureAwait(false);");
+            {
+                source.Append("                    var response = await ").Append(call).AppendLine(".ConfigureAwait(false);");
+                source.AppendLine("                    if (response != null && !response.Success && response.Error == null) response.Success = true;");
+                source.AppendLine("                    return global::VoyageForge.Rpc.Transport.RpcPayload.Pack(response.Data);");
+            }
             else
-                source.Append("                    return ").Append(call).AppendLine(";");
+            {
+                source.Append("                    var response = ").Append(call).AppendLine(";");
+                source.AppendLine("                    if (response != null && !response.Success && response.Error == null) response.Success = true;");
+                source.AppendLine("                    return global::VoyageForge.Rpc.Transport.RpcPayload.Pack(response.Data);");
+            }
 
             source.AppendLine("                }");
         }

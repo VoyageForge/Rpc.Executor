@@ -1,11 +1,52 @@
-# Calculator RPC Sample
+﻿# Calculator RPC Sample
 
-## 导入和运行
+演示现代 RPC 写法：契约 → 生成器分发/代理 → `ServicesMap` 调用。
 
-1. 确认 `Rpc.Transport` 和 `Rpc.Executor` 两个 Package 已安装（Executor manifest 会声明 Transport 依赖）。
-2. 在 Package Manager 中导入 `Calculator RPC 基础示例`。
-3. 在临时 MonoBehaviour、Editor 按钮或测试代码中执行 `await CalculatorSample.RunAsync()`。
-4. 这个 Sample 使用手写的 `CalculatorSampleDispatcher`，因此不要求先构建 Source Generator DLL；手写分发器只为 Sample 提供稳定、可运行的入口。
+## 依赖
+
+- `com.voyageforge.rpc-executor`（含 `com.voyageforge.rpc-transport`）；
+- Unity 侧 `MemoryPack.Core`（见根 README）；
+- 生成器 DLL `Runtime/Analyzers/Rpc.Executor.CodeGen.dll`（Label `RoslynAnalyzer`，首次使用前重启 Unity）。
+
+## 运行
+
+1. 导入本示例（软链接或 Package Manager）；
+2. 运行 `CalculatorScene`，或执行：
+
+```csharp
+await CalculatorSample.RunAsync();
+```
+
+## 示例契约
+
+```csharp
+[RpcService("calc")]
+public interface ICalculator
+{
+    RpcResponse<int> Add(int a, int b);
+    Task<RpcResponse<double>> DivideAsync(double a, double b, CancellationToken cancellationToken);
+}
+```
+
+- 返回值必须 `RpcResponse` 包裹；
+- 业务实现只填 `Data`，`Success` 由生成器补；
+- `CancellationToken` 由框架注入，不占请求参数。
+
+## 调用端
+
+```csharp
+ServicesMap api = new ServicesMap(CreateExecutor());
+
+RpcResponse<int> add = await api.Add(3, 4);          // 2 参数 → 元组
+RpcResponse<double> divide = await api.DivideAsync(10.0, 4.0);  // 1 参数 → 直接序列化
+
+if (!divide.Success)
+    Debug.LogError(divide.Error.Code + ": " + divide.Error.Message);
+else
+    Debug.Log("10 / 4 = " + divide.Data);
+```
+
+`api.Add` / `api.DivideAsync` 是生成器产物 `RpcGeneratedClients.g.cs` 里的 `ServicesMap` 扩展方法，底层直接 `RpcPayload.Pack(...)`（无 `object[]`、无装箱）。
 
 ## 预期结果
 
@@ -14,14 +55,10 @@
 10 / 4 = 2.5
 ```
 
-把 `DivideAsync` 的第二个参数改成 `0.0`，业务方法会出现除零异常。执行器会把异常包装成 `Success == false` 和 `Error.Code == "System.DivideByZeroException"`。
+把 `DivideAsync(10.0, 0.0)` 传 0 时，契约返回的 `RpcResponse<double>.Success` 为 true、`Data` 为 `Infinity`（`double` 除零不抛异常）；如果业务主动 `throw`，执行器会包装成 `Error.Code == "System.DivideByZeroException"`。
 
-## 建议阅读顺序
+## 阅读顺序
 
-1. `ICalculator`：看 `[RpcService("calc")]` 和方法签名。
-2. `Calculator`：看业务实现，确认业务类没有 Roslyn 依赖。
-3. `CalculatorSampleDispatcher`：看静态描述符表与 Slot switch。
-4. `CalculatorSample.CreateExecutor`：理解服务注册、Resolver、Invoker 的组装。
-5. `RpcExecutor.ExecuteAsync`：确认运行时依次做服务查找、重载选择、参数绑定和静态调用。
-
-在自己的业务程序集里，仍可使用 `Rpc.Executor/CodeGen~` 的 Source Generator 自动生成同等分发代码；Sample 回退代码不替代正式生成器。
+1. `CalculatorSample.cs`：契约、业务实现、`CreateExecutor`、`RunAsync`；
+2. `ServicesMapSample.cs`：`ClientServicesMap : ServicesMap` 的强类型封装；
+3. 生成产物 `RpcGeneratedDispatcher.g.cs` / `RpcGeneratedClients.g.cs`（Unity 里 F12 查看）。

@@ -2,7 +2,7 @@
   "name": "VoyageForge.Rpc.Executor.Samples.Handlers",
   "rootNamespace": "VoyageForge.Rpc.Samples.Handlers",
   "references": [
-    "MemoryPack.Core",
+
     "VoyageForge.Rpc.Executor",
     "VoyageForge.Rpc.Transport",
     "UniTask"

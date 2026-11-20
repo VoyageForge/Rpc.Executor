@@ -17,12 +17,6 @@ namespace VoyageForge.Rpc.Executor
             _serviceName = serviceName;
         }
 
-        /// <summary>调用本服务的方法，参数直接传入（内部序列化为 Payload）。</summary>
-        public Task<RpcResponse<TResponse>> CallAsync<TResponse>(string methodName, params object[] arguments)
-        {
-            return _map.CallAsync<TResponse>(_serviceName, methodName, arguments);
-        }
-
         /// <summary>调用本服务的方法，Payload 由调用方自行序列化。</summary>
         public Task<RpcResponse<TResponse>> CallAsync<TResponse>(string methodName, byte[] payload,
             CancellationToken ct = default(CancellationToken))

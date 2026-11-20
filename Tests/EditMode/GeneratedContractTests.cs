@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using VoyageForge.Rpc.Executor;
 using VoyageForge.Rpc.Executor.Abstractions;
+using VoyageForge.Rpc.Transport;
 
 namespace VoyageForge.Rpc.Executor.Tests
 {
@@ -31,11 +32,11 @@ namespace VoyageForge.Rpc.Executor.Tests
             descriptor = null;
             return false;
         }
-public Task<object> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct)
+public Task<byte[]> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct)
             {
                 DispatchedSlot = slot;
                 DispatchedPayload = payload;
-                return Task.FromResult<object>("dispatched");
+                return Task.FromResult(RpcPayload.Pack("dispatched"));
             }
         }
 
@@ -62,10 +63,10 @@ public Task<object> DispatchAsync(int slot, object instance, byte[] payload, Can
             MethodDescriptor descriptor = new MethodDescriptor { ServiceName = "tests", MethodName = "Run", Slot = 9 };
             byte[] payload = { 1, 2 };
 
-            object result = invoker.InvokeAsync(descriptor, this, payload, CancellationToken.None)
+            byte[] result = invoker.InvokeAsync(descriptor, this, payload, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
-            Assert.AreEqual("dispatched", result);
+            Assert.AreEqual("dispatched", RpcPayload.Unpack<string>(result));
             Assert.AreEqual(9, dispatcher.DispatchedSlot);
             Assert.AreSame(payload, dispatcher.DispatchedPayload);
         }

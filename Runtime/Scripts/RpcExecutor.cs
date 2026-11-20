@@ -124,11 +124,17 @@ namespace VoyageForge.Rpc.Executor
                 Detail = baseResponse.Detail
             };
 
-            if (baseResponse.Success && baseResponse.Result != null)
+            if (baseResponse.Success)
             {
-                typed.Data = baseResponse.Result is TResponse value
-                    ? value
-                    : (TResponse)Convert.ChangeType(baseResponse.Result, typeof(TResponse));
+                // 生成器把返回值直接序列化进 Payload（零装箱）；这里反序列化回强类型。
+                if (baseResponse.Payload != null && baseResponse.Payload.Length > 0)
+                {
+                    typed.Data = RpcPayload.Unpack<TResponse>(baseResponse.Payload);
+                }
+                else if (baseResponse.Result is TResponse value)
+                {
+                    typed.Data = value;
+                }
             }
 
             return typed;
@@ -204,11 +210,11 @@ namespace VoyageForge.Rpc.Executor
                 ct.ThrowIfCancellationRequested();
 
                 // 7. Invoker 通过 Slot 进入生成代码；同步、Task、Task<T> 统一成 Task<object>。
-                object result = await _invoker.InvokeAsync(method, instance, request.Payload, ct).ConfigureAwait(false);
+                byte[] responsePayload = await _invoker.InvokeAsync(method, instance, request.Payload, ct).ConfigureAwait(false);
 
                 // 8. 方法执行期间也可能取消；检查后再返回成功响应。
                 ct.ThrowIfCancellationRequested();
-                return RpcResponse.Ok(result);
+                return RpcResponse.Ok(responsePayload);
             }
             catch (OperationCanceledException)
             {

@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using PlasticPipe.PlasticProtocol.Messages;
 using VoyageForge.Rpc.Executor;
-using VoyageForge.Rpc.Executor.Abstractions;
 using VoyageForge.Rpc.Transport;
+using VoyageForge.Rpc.Generated;
+using Random = UnityEngine.Random;
 
 namespace VoyageForge.Rpc.Samples
 {
@@ -20,7 +20,7 @@ namespace VoyageForge.Rpc.Samples
 
         public async Task<RpcResponse<string>> GetName(int userId)
         {
-            return await CallAsync<string>("user", "GetName", userId);
+            return await CallAsync<string>("user", "GetName", RpcPayload.Pack(userId));
         }
     }
 
@@ -33,15 +33,15 @@ namespace VoyageForge.Rpc.Samples
         [RpcService("user")]
         public interface IUserService
         {
-            /// <summary>按 Id 查用户名。</summary>
-            string GetName(int userId);
+            /// <summary>按 Id 查用户名（返回值必须 RpcResponse 包裹）。</summary>
+            RpcResponse<string> GetName(int userId);
         }
 
         public sealed class UserService : IUserService
         {
-            public string GetName(int userId)
+            public RpcResponse<string> GetName(int userId)
             {
-                return "user-" + userId;
+                return new RpcResponse<string> { Data = "user-" + userId };
             }
         }
 
@@ -69,8 +69,20 @@ namespace VoyageForge.Rpc.Samples
             var api = new ClientServicesMap(CreateExecutor());
 
             // axios 风格：api.CallAsync<T>(service, method, params...)
-            RpcResponse<int> add = await api.CallAsync<int>("calc", "Add", 3, 4);
+            var add = await api.Add(3, 4);
             UnityEngine.Debug.Log("calc.Add(3,4) = " + add.Data);
+
+
+            var divide = await api.DivideAsync(3.0, 0);
+
+            if (divide.Success)
+            {
+                UnityEngine.Debug.Log("calc.Divide(3.0,4.0) = " + divide.Data);
+            }
+            else
+            {
+                UnityEngine.Debug.Log(divide.Error.Message);
+            }
 
             // 也可以先进入服务命名空间：api.Service("user").CallAsync<T>(method, params...)
             RpcResponse<string> name = await api.GetName(7);

@@ -19,7 +19,7 @@ namespace VoyageForge.Rpc.Executor
         bool TryResolve(ulong methodId, object[] args, out MethodDescriptor descriptor);
 
         /// <summary>根据 Slot 进入生成的 switch；boundArgs 已含框架注入的 CancellationToken。</summary>
-        Task<object> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct);
+        Task<byte[]> DispatchAsync(int slot, object instance, byte[] payload, CancellationToken ct);
     }
 
     /// <summary>多个重载无法通过参数可转换性唯一确定时抛出的异常。</summary>
@@ -52,7 +52,7 @@ namespace VoyageForge.Rpc.Executor
         }
 
         /// <summary>只按 Slot 转发到生成的 switch；不使用 MethodInfo.Invoke。</summary>
-        public Task<object> InvokeAsync(MethodDescriptor method, object instance, byte[] payload,
+        public Task<byte[]> InvokeAsync(MethodDescriptor method, object instance, byte[] payload,
             CancellationToken ct)
         {
             if (method == null) throw new ArgumentNullException(nameof(method));

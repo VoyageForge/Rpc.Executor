@@ -79,6 +79,9 @@
         <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.UnsupportedSignature">
             <summary>RPC002：方法使用了当前版本不支持的语言签名。</summary>
         </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.UnwrappedReturnType">
+            <summary>RPC004：契约返回值没有用 RpcResponse 包裹。</summary>
+        </member>
         <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.InvalidService">
             <summary>RPC003：服务声明不是有效的非泛型 class/interface，或服务名为空。</summary>
         </member>
@@ -173,6 +176,12 @@
         </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.TupleType(System.Collections.Generic.List{Microsoft.CodeAnalysis.IParameterSymbol})">
             <summary>把参数列表转成 C# ValueTuple 类型文本：({T0} {n0}, {T1} {n1}, ...)。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.ExtractBusinessType(Microsoft.CodeAnalysis.ITypeSymbol)">
+            <summary>
+            从契约返回类型提取业务类型：RpcResponse&lt;T&gt; / Task&lt;RpcResponse&lt;T&gt;&gt; → T；
+            RpcResponse / Task → object；其他返回类型视为错误（契约必须用 RpcResponse 包裹）。
+            </summary>
         </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.PascalCase(System.String)">
             <summary>把参数名转 PascalCase（MemoryPack DTO 属性命名）。</summary>

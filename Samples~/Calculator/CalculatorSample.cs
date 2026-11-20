@@ -1,10 +1,8 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
-using System;
-using System.Linq;
 using VoyageForge.Rpc.Executor;
-using VoyageForge.Rpc.Executor.Abstractions;
 using VoyageForge.Rpc.Transport;
+using VoyageForge.Rpc.Generated;
 
 namespace VoyageForge.Rpc.Samples
 {
@@ -15,26 +13,31 @@ namespace VoyageForge.Rpc.Samples
     public interface ICalculator
     {
         /// <summary>同步方法：展示 int 参数和 int 返回值。</summary>
-        int Add(int a, int b);
+        RpcResponse<int> Add(int a, int b);
+
 
         /// <summary>
         /// 异步方法：展示 Task&lt;T&gt; 返回值解包，以及 CancellationToken 自动注入。
         /// 调用方只传两个 double，第三个 token 由 RpcExecutor 提供。
         /// </summary>
-        Task<double> DivideAsync(double a, double b, CancellationToken cancellationToken);
+        Task<RpcResponse<double>> DivideAsync(double a, double b, CancellationToken cancellationToken);
     }
 
     /// <summary>纯业务实现，不依赖 Roslyn、Source Generator 或 RpcExecutor 内部实现。</summary>
     public sealed class Calculator : ICalculator
     {
         /// <summary>返回两个整数的和。</summary>
-        public int Add(int a, int b) { return a + b; }
+        public RpcResponse<int> Add(int a, int b)
+        {
+            return new RpcResponse<int> { Data = a + b };
+        }
 
         /// <summary>计算浮点除法；分母为零时的异常由 RpcExecutor 转换为 RpcResponse.Error。</summary>
-        public Task<double> DivideAsync(double a, double b, CancellationToken cancellationToken)
+        public Task<RpcResponse<double>> DivideAsync(double a, double b, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(a / b);
+
+            return Task.FromResult(new RpcResponse<double> { Data = a / b });
         }
     }
 
@@ -64,25 +67,44 @@ namespace VoyageForge.Rpc.Samples
         }
 
         /// <summary>执行需求文档中的两个示例：Add(3,4)=7、DivideAsync(10,4)=2.5。</summary>
+        /// <summary>
+        /// 演示 0/1/2+ 参数规则 + RpcResponse 错误处理。
+        /// 0 参数：契约里没有，可在 ICalculator 里加 RpcResponse Ping()。
+        /// </summary>
         public static async Task RunAsync()
         {
-            RpcExecutor executor = CreateExecutor();
+            ServicesMap api = new ServicesMap(CreateExecutor());
 
-            // 客户端只给 ServiceName + MethodName；MethodId 由 RpcExecutor 计算并缓存。
-            RpcResponse<int> add = await executor.ExecuteAsync<int>(new RpcRequest
-            {
-                ServiceName = "calc",
-                MethodName = "Add",
-                Payload = RpcPayload.Pack(new object[] { 3, 4 })
-            });
-            UnityEngine.Debug.Log("3 + 4 = " + add.Data);
+            // 2 参数：生成代理 Pack 元组
+            RpcResponse<int> add = await api.Add(3, 4);
+            LogResponse("3 + 4", add);
 
-            RpcResponse<double> divide = await executor.ExecuteAsync<double>(new RpcRequest
+            // 1 参数：直接序列化参数类型
+            RpcResponse<double> divide = await api.DivideAsync(10.0, 4.0);
+            LogResponse("10 / 4", divide);
+
+            // 错误处理：调用方必须先看 Success 再读 Data
+            RpcResponse<double> divideByZero = await api.DivideAsync(10.0, 0.0);
+            LogResponse("10 / 0", divideByZero);
+
+            // ServiceApi 命名空间写法（等价于 api.Add，适合动态 service/method 场景）
+            ServiceApi calc = api.Service("calc");
+            RpcResponse<int> viaServiceApi = await calc.CallAsync<int>("Add", RpcPayload.Pack((3, 4)));
+            LogResponse("ServiceApi Add", viaServiceApi);
+        }
+
+        /// <summary>统一打印：成功打 Data，失败打 Error.Code / Error.Message。</summary>
+        private static void LogResponse<T>(string title, RpcResponse<T> response)
+        {
+            if (response.Success)
             {
-                ServiceName = "calc",
-                MethodName = "DivideAsync",
-                Payload = RpcPayload.Pack(new object[] { 10.0, 4.0 })
-            });
-            UnityEngine.Debug.Log("10 / 4 = " + divide.Data);
-        }    }
+                UnityEngine.Debug.Log(title + " = " + response.Data);
+            }
+            else
+            {
+                UnityEngine.Debug.LogError(title + " 失败：[" + response.Error.Code + "] " + response.Error.Message);
+            }
+        }
+
+    }
 }
