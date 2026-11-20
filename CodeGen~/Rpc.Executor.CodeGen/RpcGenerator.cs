@@ -128,7 +128,10 @@ namespace VoyageForge.Rpc.CodeGen
             /// <summary>是否返回 Task 或 Task&lt;T&gt;。</summary>
             public bool IsAsync;
             /// <summary>实际业务返回类型；无返回值使用 void。</summary>
-            public ITypeSymbol ResultType;
+            /// <summary>方法所需权限（[RpcAuthorize]），空表示不校验。</summary>
+        public string RequiredPermission;
+
+        public ITypeSymbol ResultType;
         }
 
         /// <summary>
@@ -194,6 +197,7 @@ namespace VoyageForge.Rpc.CodeGen
                         MethodId = Fnv1A64(key),
                         Slot = methods.Count,
                         RawArgumentCount = method.Parameters.Count(parameter => !IsCancellationToken(parameter.Type)),
+                        RequiredPermission = GetRequiredPermission(context.Compilation, method),
                         IsAsync = isAsync,
                         ResultType = resultType
                     });
@@ -602,7 +606,7 @@ namespace VoyageForge.Rpc.CodeGen
                 .Append("                ServiceName = \"").Append(CSharpEscape(method.ServiceName)).AppendLine("\",")
                 .Append("                MethodName = \"").Append(CSharpEscape(method.Method.Name)).AppendLine("\",")
                 .Append("                MethodId = RpcMethodIds.Method_").Append(method.Slot).AppendLine(",")
-                .Append("                Slot = ").Append(method.Slot).AppendLine(",")
+                .Append("                RequiredPermission = \"").Append(CSharpEscape(method.RequiredPermission ?? "")).AppendLine("\",")
                 .Append("                IsAsync = ").Append(method.IsAsync ? "true" : "false").AppendLine(",")
                 .Append("                ResultType = typeof(").Append(TypeSyntax(method.ResultType)).AppendLine("),")
                 .Append("                ParameterTypes = new global::System.Type[] { ")
@@ -680,6 +684,24 @@ namespace VoyageForge.Rpc.CodeGen
             }
 
             source.AppendLine("                }");
+        }
+
+        /// <summary>读取方法上的 [RpcAuthorize] 权限名（多个时取最后一个非空）。</summary>
+        private static string GetRequiredPermission(Compilation compilation, IMethodSymbol method)
+        {
+            string permission = null;
+            foreach (AttributeData attribute in method.GetAttributes())
+            {
+                if (attribute.AttributeClass == null) continue;
+                if (attribute.AttributeClass.ToDisplayString() != "VoyageForge.Rpc.Executor.RpcAuthorizeAttribute") continue;
+                if (attribute.ConstructorArguments.Length > 0)
+                {
+                    string value = attribute.ConstructorArguments[0].Value as string;
+                    if (!string.IsNullOrEmpty(value)) permission = value;
+                }
+            }
+
+            return permission;
         }
 
         /// <summary>判断返回类型是不是 System.Threading.Tasks.Task（非泛型）。</summary>

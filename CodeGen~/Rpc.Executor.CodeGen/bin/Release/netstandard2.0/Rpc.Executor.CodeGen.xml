@@ -135,8 +135,9 @@
         <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.IsAsync">
             <summary>是否返回 Task 或 Task&lt;T&gt;。</summary>
         </member>
-        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.ResultType">
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.RequiredPermission">
             <summary>实际业务返回类型；无返回值使用 void。</summary>
+            <summary>方法所需权限（[RpcAuthorize]），空表示不校验。</summary>
         </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.CollectMethods(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.IEnumerable{Microsoft.CodeAnalysis.INamedTypeSymbol},System.Boolean@)">
             <summary>
@@ -193,6 +194,9 @@
             <summary>
             生成一个 switch case。参数顺序与契约方法保持一致；CancellationToken 使用 DispatchAsync 收到的 ct。
             </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetRequiredPermission(Microsoft.CodeAnalysis.Compilation,Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>读取方法上的 [RpcAuthorize] 权限名（多个时取最后一个非空）。</summary>
         </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.IsNonGenericTask(Microsoft.CodeAnalysis.ITypeSymbol)">
             <summary>判断返回类型是不是 System.Threading.Tasks.Task（非泛型）。</summary>

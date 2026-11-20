@@ -36,6 +36,9 @@ namespace VoyageForge.Rpc.Executor.Abstractions
         public Type[] ParameterTypes { get; set; }
 
         /// <summary>方法是否返回 Task 或 Task&lt;T&gt;。</summary>
+        /// <summary>方法所需的权限名（来自 [RpcAuthorize]）；为空表示不校验。</summary>
+        public string RequiredPermission { get; set; }
+
         public bool IsAsync { get; set; }
 
         /// <summary>同步返回类型或 Task&lt;T&gt; 的 T；无返回值时是 typeof(void)。</summary>

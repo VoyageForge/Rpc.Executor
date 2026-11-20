@@ -210,6 +210,17 @@ namespace VoyageForge.Rpc.Executor
                 ct.ThrowIfCancellationRequested();
 
                 // 7. Invoker 通过 Slot 进入生成代码；同步、Task、Task<T> 统一成 Task<object>。
+                // 执行器层上下文：从请求头解析身份与权限（SessionId 属于传输层，不进入执行器）。
+                RpcContext rpcContext = RpcContext.FromHeaders(request.Headers);
+                if (!string.IsNullOrEmpty(method.RequiredPermission) &&
+                    !rpcContext.HasPermission(method.RequiredPermission))
+                {
+                    return RpcResponse.Fail("UNAUTHORIZED", "缺少权限：" + method.RequiredPermission);
+                }
+
+                // 控制器基类：注入上下文（UserId/Permissions/Headers）。
+                if (instance is RpcControllerBase controller) controller.SetContext(rpcContext);
+
                 byte[] responsePayload = await _invoker.InvokeAsync(method, instance, request.Payload, ct).ConfigureAwait(false);
 
                 // 8. 方法执行期间也可能取消；检查后再返回成功响应。
