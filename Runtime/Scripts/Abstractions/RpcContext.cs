@@ -7,7 +7,7 @@ namespace VoyageForge.Rpc.Executor
     /// 执行器层调用上下文：从 RpcRequest.Headers 解析（由传输层把会话信息写入请求头）。
     /// 注意：SessionId 属于传输层概念，这里不暴露；执行器层只关心身份与权限。
     /// </summary>
-    public sealed class RpcContext
+    public class RpcContext
     {
         /// <summary>调用方用户 ID；未提供时为 null。</summary>
         public string UserId { get; set; }

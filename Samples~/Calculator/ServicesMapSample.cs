@@ -30,19 +30,13 @@ namespace VoyageForge.Rpc.Samples
     /// </summary>
     public static class ServicesMapSample
     {
+        /// <summary>Controller 模式：partial + [RpcService] + [RpcMethod]。</summary>
         [RpcService("user")]
-        public interface IUserService
+        public sealed partial class UserController : RpcControllerBase
         {
-            /// <summary>按 Id 查用户名（返回值必须 RpcResponse 包裹）。</summary>
-            RpcResponse<string> GetName(int userId);
-        }
-
-        public sealed class UserService : IUserService
-        {
-            public RpcResponse<string> GetName(int userId)
-            {
-                return new RpcResponse<string> { Data = "user-" + userId };
-            }
+            /// <summary>按 Id 查用户名。</summary>
+            [RpcMethod]
+            public RpcResponse<string> GetName(int userId) => Ok("user-" + userId);
         }
 
 
@@ -51,7 +45,7 @@ namespace VoyageForge.Rpc.Samples
         {
             ServiceRegistry registry = new ServiceRegistry();
             registry.Register<ICalculator>(new Calculator(), "calc");
-            registry.Register<IUserService>(new UserService(), "user");
+            registry.Register<UserController>(new UserController(), "user");
 
             IGeneratedRpcDispatcher dispatcher = new VoyageForge.Rpc.Generated.RpcGeneratedDispatcher();
             return new RpcExecutor(

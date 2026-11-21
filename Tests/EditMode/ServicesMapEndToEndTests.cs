@@ -50,6 +50,23 @@ namespace VoyageForge.Rpc.Executor.Tests
         }
 
         [Test]
+        public void DebugRawEcho()
+        {
+            RpcExecutor executor = CreateExecutor();
+            RpcResponse raw = executor.ExecuteAsync(new RpcRequest
+            {
+                ServiceName = "tests.calc",
+                MethodName = "Echo",
+                Payload = RpcPayload.Pack("hi")
+            }).GetAwaiter().GetResult();
+
+            UnityEngine.Debug.Log("[DebugRawEcho] success=" + raw.Success +
+                " payloadLen=" + (raw.Payload?.Length ?? -1) +
+                " result=" + (raw.Result ?? "null") +
+                " error=" + (raw.Error?.Code ?? "none"));
+        }
+
+        [Test]
         public void ServicesMap调用单参数方法()
         {
             ServicesMap api = new ServicesMap(CreateExecutor());
@@ -58,7 +75,7 @@ namespace VoyageForge.Rpc.Executor.Tests
 
             Assert.IsTrue(response.Success,
                 "失败：" + (response.Error != null ? response.Error.Code + ":" + response.Error.Message : "无错误信息"));
-            Assert.AreEqual("echo:hi", response.Data);
+            Assert.AreEqual("echo:hi", response.Data, "payloadLen=" + (response.Payload?.Length ?? -1) + " err=" + (response.Error?.Code ?? "none"));
         }
     }
 }

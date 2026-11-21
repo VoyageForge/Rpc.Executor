@@ -123,6 +123,9 @@
         <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.CanonicalKey">
             <summary>MethodId 的规范化输入 key。</summary>
         </member>
+        <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.RpcMethodName">
+            <summary>RPC 方法名（[RpcMethod] 优先，否则方法名）。</summary>
+        </member>
         <member name="F:VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod.MethodId">
             <summary>FNV-1a 64 位稳定 ID。</summary>
         </member>
@@ -172,6 +175,11 @@
             0 参数不传 payload；1 参数直接传；2+ 参数组合为 ValueTuple（与 dispatch 的反序列化对应）。
             </summary>
         </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitControllerPartials(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
+            <summary>
+            为继承 RpcControllerBase 的控制器生成 Invoke{Method}(byte[] payload) 函数（partial 类中可直接调用）。
+            </summary>
+        </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.EmitRequestDtos(Microsoft.CodeAnalysis.GeneratorExecutionContext,System.Collections.Generic.List{VoyageForge.Rpc.CodeGen.RpcGenerator.ServiceMethod})">
             <summary>生成 2 个及以上参数的 MemoryPack 请求 DTO（0/1 参数不生成）。</summary>
         </member>
@@ -194,6 +202,12 @@
             <summary>
             生成一个 switch case。参数顺序与契约方法保持一致；CancellationToken 使用 DispatchAsync 收到的 ct。
             </summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.HasRpcMethod(Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>方法是否标注了 [RpcMethod]（Controller 模式下必须标注才参与 RPC）。</summary>
+        </member>
+        <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetRpcMethodName(Microsoft.CodeAnalysis.IMethodSymbol)">
+            <summary>RPC 方法名：[RpcMethod] 显式名优先，否则使用方法名。</summary>
         </member>
         <member name="M:VoyageForge.Rpc.CodeGen.RpcGenerator.GetRequiredPermission(Microsoft.CodeAnalysis.Compilation,Microsoft.CodeAnalysis.IMethodSymbol)">
             <summary>读取方法上的 [RpcAuthorize] 权限名（多个时取最后一个非空）。</summary>
