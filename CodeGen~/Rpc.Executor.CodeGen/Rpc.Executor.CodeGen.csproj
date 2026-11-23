@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Unity 2022.3 Roslyn Analyzer 加载器以 .NET Standard 2.0 为兼容边界。 -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <!--
+      开启可空注解：移植自试验包（Rpc.CodeGen.Probe）的 DTO 生成代码使用了 string? 等注解。
+      只影响编译期分析，不改变产物。
+    -->
+    <Nullable>enable</Nullable>
+    <AssemblyName>Rpc.Executor.CodeGen</AssemblyName>
+    <RootNamespace>VoyageForge.Rpc.CodeGen</RootNamespace>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- 可空性告警属于迁移噪音，不升级为错误。 -->
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8603;CS8604;CS8625;CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+      Roslyn 4.3：Unity 2022.3.12f1+ 内置版本。
+      必须与 MemoryPack.Generator 的编译版本一致 —— 否则传 Compilation/INamedTypeSymbol
+      给它的 TypeMeta 时会出现类型身份不匹配（两个不同版本的 Microsoft.CodeAnalysis 程序集）。
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      直接复用 MemoryPack 的代码发射逻辑（TypeMeta / Validate / Emit）。
+      MemoryPack.Generator 是 analyzer-only 包（只有 analyzers/dotnet/cs/，没有 lib/），
+      所以用 GeneratePathProperty 拿包路径 + ExcludeAssets 挡掉 analyzer 注入，
+      再用 <Reference> 精确引用包内 DLL，从而获得编译期强类型。
+      版本 1.21.4 与工程内 Assets/Plugins/MemoryPackAnalyzers 那份保持一致。
+    -->
+    <PackageReference Include="MemoryPack.Generator"
+                      Version="1.21.4"
+                      GeneratePathProperty="true"
+                      PrivateAssets="all"
+                      ExcludeAssets="analyzers" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="MemoryPack.Generator">
+      <HintPath>$(PkgMemoryPack_Generator)\analyzers\dotnet\cs\MemoryPack.Generator.dll</HintPath>
+      <!-- 不复制到输出：这个 DLL 由 Unity 侧的 MemoryPack analyzer 提供，避免重复部署。 -->
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="ValidateMemoryPackGeneratorPackage" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(PkgMemoryPack_Generator)' == ''"
+           Text="未能解析 MemoryPack.Generator 包路径。请确认 NuGet 还原成功（dotnet restore）。" />
+  </Target>
+</Project>
