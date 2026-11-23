@@ -32,6 +32,8 @@ namespace VoyageForge.Rpc.Executor
 
         /// <summary>构造时复制的拦截器快照，调用过程中顺序不会被外部改动。</summary>
         private readonly IReadOnlyList<IRpcInterceptor> _interceptors;
+        private readonly IRpcContextFactory _contextFactory;
+        private readonly IRpcAuthorizationPolicy _authorizationPolicy;
 
         /// <summary>
         /// MethodId → 可读名称的解析器（由生成器 RpcMethodNames 注入）；默认 null 表示无名称表。
@@ -51,7 +53,8 @@ namespace VoyageForge.Rpc.Executor
         /// <summary>创建 RPC 执行器并注入所有必要协作者。</summary>
         public RpcExecutor(ServiceRegistry services, IMethodResolver resolver, IInvoker invoker,
             IArgumentConverter converter = null, IEnumerable<IRpcInterceptor> interceptors = null,
-            IdempotencyCache idempotency = null)
+            IdempotencyCache idempotency = null,
+            IRpcContextFactory contextFactory = null, IRpcAuthorizationPolicy authorizationPolicy = null)
         {
             _idempotency = idempotency ?? new IdempotencyCache();
             _services = services ?? throw new ArgumentNullException(nameof(services));
@@ -61,6 +64,8 @@ namespace VoyageForge.Rpc.Executor
 
             // ToArray 创建独立快照，避免调用期间调用方修改原始 List 导致拦截顺序变化。
             _interceptors = (interceptors ?? Array.Empty<IRpcInterceptor>()).ToArray();
+            _contextFactory = contextFactory ?? new DefaultRpcContextFactory();
+            _authorizationPolicy = authorizationPolicy ?? new RequiredPermissionPolicy();
         }
 
         /// <summary>执行一个 RPC 请求，并把拦截器异常也统一转换为 RpcResponse。</summary>
@@ -221,7 +226,11 @@ namespace VoyageForge.Rpc.Executor
                 // 控制器基类：注入上下文（UserId/Permissions/Headers）。
                 if (instance is RpcControllerBase controller) controller.SetContext(rpcContext);
 
+                UnityEngine.Debug.Log("[RpcExec] -> " + method.ServiceName + "." + method.MethodName +
+                    " reqLen=" + (request.Payload?.Length ?? -1));
                 byte[] responsePayload = await _invoker.InvokeAsync(method, instance, request.Payload, ct).ConfigureAwait(false);
+                UnityEngine.Debug.Log("[RpcExec] <- " + method.ServiceName + "." + method.MethodName +
+                    " respLen=" + (responsePayload?.Length ?? -1));
 
                 // 8. 方法执行期间也可能取消；检查后再返回成功响应。
                 ct.ThrowIfCancellationRequested();
