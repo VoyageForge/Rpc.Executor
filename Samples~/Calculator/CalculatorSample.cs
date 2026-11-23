@@ -1,110 +1,74 @@
-﻿using System.Threading;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
-using VoyageForge.Rpc.Executor;
-using VoyageForge.Rpc.Transport;
-using VoyageForge.Rpc.Generated;
+using UnityEngine;
+using VoyageForge.Rpc.Generated.VoyageForge_Rpc_Executor_Samples;
+using VoyageForge.Rpc.Transport.Session;
 
 namespace VoyageForge.Rpc.Samples
 {
-    /// <summary>
-    /// 一个最小 RPC 服务契约。RpcGenerator 编译期读取 [RpcService]，但不会修改这份业务源码。
-    /// </summary>
-    [RpcService("calc")]
-    public interface ICalculator
-    {
-        /// <summary>同步方法：展示 int 参数和 int 返回值。</summary>
-        RpcResponse<int> Add(int a, int b);
-
-
-        /// <summary>
-        /// 异步方法：展示 Task&lt;T&gt; 返回值解包，以及 CancellationToken 自动注入。
-        /// 调用方只传两个 double，第三个 token 由 RpcExecutor 提供。
-        /// </summary>
-        Task<RpcResponse<double>> DivideAsync(double a, double b, CancellationToken cancellationToken);
-    }
-
-    /// <summary>纯业务实现，不依赖 Roslyn、Source Generator 或 RpcExecutor 内部实现。</summary>
-    public sealed class Calculator : ICalculator
-    {
-        /// <summary>返回两个整数的和。</summary>
-        public RpcResponse<int> Add(int a, int b)
-        {
-            return new RpcResponse<int> { Data = a + b };
-        }
-
-        /// <summary>计算浮点除法；分母为零时的异常由 RpcExecutor 转换为 RpcResponse.Error。</summary>
-        public Task<RpcResponse<double>> DivideAsync(double a, double b, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.FromResult(new RpcResponse<double> { Data = a / b });
-        }
-    }
-
-
     /// <summary>Sample 的组装入口，可由 MonoBehaviour、Editor 按钮或测试代码调用。</summary>
     public static class CalculatorSample
     {
         /// <summary>
-        /// 构建一个可执行 calc 服务的 RpcExecutor。
-        /// 分发器由 RpcGenerator 生成（Rpc.Executor.CodeGen），Sample 不再手写。
+        /// 构建服务端 Controller 注册表。
         /// </summary>
-        public static RpcExecutor CreateExecutor()
+        /// <remarks>
+        /// <c>GeneratedRpcControllerCatalog</c> 由生成器按<b>程序集</b>产出
+        /// （命名空间为 <c>VoyageForge.Rpc.Generated.&lt;程序集名&gt;</c>，非标识符字符替换为下划线），
+        /// 这里把本程序集所有 <c>[RpcController]</c> 注册进去。
+        /// </remarks>
+        public static RpcControllerRegistry CreateRegistry()
         {
-            ServiceRegistry registry = new ServiceRegistry();
-            registry.Register<ICalculator>(new Calculator());
+            RpcControllerRegistry registry = new RpcControllerRegistry();
 
-            // 生成器产物：描述符表 + switch(slot) 调用；两个适配器共用同一实例。
-            IGeneratedRpcDispatcher dispatcher = new VoyageForge.Rpc.Generated.RpcGeneratedDispatcher();
-            return new RpcExecutor(
+            // 工厂在每次调用时执行：返回新的 Controller 实例，
+            // 避免 Controller 内部的可变字段被并发请求互相覆盖（不要返回共享单例）。
+            GeneratedRpcControllerCatalog.Register(
                 registry,
-                new GeneratedMethodResolver(dispatcher),
-                new GeneratedRpcInvoker(dispatcher))
-            {
-                // 生成器名称表：MethodId → "calc.Add"，仅用于诊断，不参与网络传输。
-                MethodNameResolver = VoyageForge.Rpc.Generated.RpcMethodNames.TryGetName
-            };
+                type => type == typeof(Calculator) ? new Calculator() : null);
+
+            return registry;
         }
 
-        /// <summary>执行需求文档中的两个示例：Add(3,4)=7、DivideAsync(10,4)=2.5。</summary>
         /// <summary>
-        /// 演示 0/1/2+ 参数规则 + RpcResponse 错误处理。
-        /// 0 参数：契约里没有，可在 ICalculator 里加 RpcResponse Ping()。
+        /// 演示 Controller 调用：调用端只持有 <see cref="CalculatorControllerMap"/>，
+        /// 通过 <c>session.Ability.Calculator</c> 像调本地方法一样调远端。
         /// </summary>
+        /// <remarks>
+        /// 这里用无参构造的 <c>TcpSession</c>（不建立真实连接），只演示装配与调用形态；
+        /// 真实项目应当 <c>new TcpSession&lt;CalculatorControllerMap&gt;(tcpClient, registry)</c>。
+        /// 离线时调用会失败，所以整段用 try/catch 包住并降级到本地直调，
+        /// 保证示例场景在没连服务端时点按钮也不会炸。
+        /// </remarks>
         public static async Task RunAsync()
         {
-            ServicesMap api = new ServicesMap(CreateExecutor());
+            RpcControllerRegistry registry = CreateRegistry();
+            TcpSession<CalculatorControllerMap> session = new TcpSession<CalculatorControllerMap>(registry);
 
-            // 2 参数：生成代理 Pack 元组
-            RpcResponse<int> add = await api.Add(3, 4);
-            LogResponse("3 + 4", add);
-
-            // 1 参数：直接序列化参数类型
-            RpcResponse<double> divide = await api.DivideAsync(10.0, 4.0);
-            LogResponse("10 / 4", divide);
-
-            // 错误处理：调用方必须先看 Success 再读 Data
-            RpcResponse<double> divideByZero = await api.DivideAsync(10.0, 0.0);
-            LogResponse("10 / 0", divideByZero);
-
-            // ServiceApi 命名空间写法（等价于 api.Add，适合动态 service/method 场景）
-            ServiceApi calc = api.Service("calc");
-            RpcResponse<int> viaServiceApi = await calc.CallAsync<int>("Add", RpcPayload.Pack((3, 4)));
-            LogResponse("ServiceApi Add", viaServiceApi);
-        }
-
-        /// <summary>统一打印：成功打 Data，失败打 Error.Code / Error.Message。</summary>
-        private static void LogResponse<T>(string title, RpcResponse<T> response)
-        {
-            if (response.Success)
+            try
             {
-                UnityEngine.Debug.Log(title + " = " + response.Data);
+                int sum = await session.Ability.Calculator.Add(3, 4);
+                Debug.Log("[Controller] 3 + 4 = " + sum);
+
+                // Controller 模式的 proxy 方法签名与契约接口一致，
+                // 所以 CancellationToken 由调用方显式传入（框架不会自动省略这个形参）。
+                double quotient = await session.Ability.Calculator.DivideAsync(10.0, 4.0, CancellationToken.None);
+                Debug.Log("[Controller] 10 / 4 = " + quotient);
             }
-            else
+            catch (Exception exception)
             {
-                UnityEngine.Debug.LogError(title + " 失败：[" + response.Error.Code + "] " + response.Error.Message);
+                // 无连接时走这里：仍然演示业务正确性，避免示例场景刷错误日志。
+                Debug.LogWarning("[Controller] 远程调用不可用（示例未建立连接）：" + exception.Message);
+
+                Calculator local = new Calculator();
+                Debug.Log("[Controller][本地直调] 3 + 4 = " + await local.Add(3, 4));
+                Debug.Log("[Controller][本地直调] 10 / 4 = " + await local.DivideAsync(10.0, 4.0, CancellationToken.None));
+            }
+            finally
+            {
+                session.Dispose();
             }
         }
-
     }
 }

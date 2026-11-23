@@ -1,8 +1,8 @@
-﻿{
+{
   "name": "com.voyageforge.rpc-executor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "VoyageForge RPC Executor",
-  "description": "传输无关的 RPC 执行器：字符串协议 + 强类型处理器、5 分钟幂等缓存、MessageId/TypeId 消息映射与源生成器。",
+  "description": "RPC Controller 契约、服务端强类型 Dispatcher、程序集 Catalog 与 RPC 执行器。",
   "unity": "2022.3",
   "author": {
     "name": "VoyageForge"
@@ -26,6 +26,6 @@
   ],
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "com.voyageforge.rpc-transport": "0.2.0"
+    "com.voyageforge.rpc-transport": "0.3.0"
   }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,12 +46,13 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 if (method.MethodName == "Add")
                 {
-                    return Task.FromResult(RpcPayload.Pack(RpcPayload.ReadArgument<int>(payload, 0) + RpcPayload.ReadArgument<int>(payload, 1)));
+                    (int a, int b) args = RpcPayload.Unpack<(int, int)>(payload);
+                    return Task.FromResult(RpcPayload.Pack(args.a + args.b));
                 }
 
                 if (method.MethodName == "AddWithToken")
                 {
-                    return Task.FromResult(RpcPayload.Pack(RpcPayload.ReadArgument<int>(payload, 0)));
+                    return Task.FromResult(RpcPayload.Pack(RpcPayload.Unpack<int>(payload)));
                 }
 
                 return Task.FromResult(Array.Empty<byte>());
@@ -67,7 +68,9 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 ServiceName = "tests.echo",
                 MethodName = methodName,
-                Payload = RpcPayload.Pack<object[]>(parameters),
+                Payload = methodName == "Add"
+                    ? RpcPayload.Pack(((int)parameters[0], (int)parameters[1]))
+                    : RpcPayload.Pack((int)parameters[0]),
             };
         }
 
@@ -92,7 +95,7 @@ namespace VoyageForge.Rpc.Executor.Tests
             {
                 ServiceName = "tests.missing",
                 MethodName = "Add",
-                Payload = RpcPayload.Pack(new object[] { 1, 2 })
+                Payload = RpcPayload.Pack((1, 2))
             }).GetAwaiter().GetResult();
 
             Assert.IsFalse(response.Success);

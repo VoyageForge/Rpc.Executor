@@ -50,10 +50,17 @@
         "netstandard2.0": {
           "targetAlias": "netstandard2.0",
           "dependencies": {
+            "MemoryPack.Generator": {
+              "include": "Runtime, Compile, Build, Native, ContentFiles, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.21.4, )",
+              "generatePathProperty": true
+            },
             "Microsoft.CodeAnalysis.CSharp": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[4.1.0, )"
+              "version": "[4.3.0, )"
             },
             "NETStandard.Library": {
               "suppressParent": "All",
