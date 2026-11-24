@@ -92,8 +92,19 @@ try {
 
     Write-Progress -Activity '构建 Rpc.Executor Source Generator' -Status '复制 DLL 和 Unity Analyzer 元数据' -PercentComplete 90
     New-Item -ItemType Directory -Path $AnalyzerDirectory -Force | Out-Null
-    Copy-Item -LiteralPath $BuiltDll -Destination $TargetDll -Force
-    Copy-Item -LiteralPath $MetaTemplate -Destination $TargetMeta -Force
+
+    # Unity 会把 Runtime/Analyzers 下的 analyzer DLL 加载进编辑器进程并一直持有句柄，
+    # 所以 Unity 开着的时候这里几乎必然 IOException。这不是脚本缺陷，
+    # 但默认的 Copy-Item 报错只给一句 "The process cannot access the file"，
+    # 很容易被误当成"脚本又闪退了"。这里换成可操作的提示。
+    try {
+        Copy-Item -LiteralPath $BuiltDll -Destination $TargetDll -Force
+        Copy-Item -LiteralPath $MetaTemplate -Destination $TargetMeta -Force
+    }
+    catch [System.IO.IOException] {
+        throw ("无法覆盖 {0}：文件正被占用。Unity 编辑器会一直持有 analyzer DLL 的句柄，" +
+               "请先关闭 Unity 再重新运行本脚本。原始错误：{1}" -f $TargetDll, $_.Exception.Message)
+    }
     if (-not (Test-Path -LiteralPath $TargetDll) -or -not (Test-Path -LiteralPath $TargetMeta)) {
         throw 'Analyzer DLL 或 .meta 文件复制失败。'
     }
