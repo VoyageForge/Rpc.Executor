@@ -2,8 +2,7 @@
   "name": "VoyageForge.Rpc.Executor",
   "rootNamespace": "Rpc.Executor",
   "references": [
-    "VoyageForge.Rpc.Transport",
-    "UniTask"
+    "VoyageForge.Rpc.Transport"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -13,5 +12,5 @@
   "autoReferenced": true,
   "defineConstraints": [],
   "versionDefines": [],
-  "noEngineReferences": false
+  "noEngineReferences": true
 }

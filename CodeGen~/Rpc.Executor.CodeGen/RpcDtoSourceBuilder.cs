@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 
 namespace VoyageForge.Rpc.CodeGen
@@ -17,13 +15,11 @@ namespace VoyageForge.Rpc.CodeGen
     /// 而不是独立 Formatter 类。少写 partial 会导致两份声明无法合并。
     /// </para>
     /// <para>
-    /// <b>参数按名称序数排序</b>：调用方与被调用方是<b>各自程序集</b>分别生成的，
-    /// 两边的参数顺序必须由同一个确定性规则导出，否则 <c>MemoryPackOrder</c> 会错位。
+    /// <b>参数按声明顺序映射</b>：调用方与被调用方是<b>各自程序集</b>分别生成的，
+    /// DTO 使用 Arg0、Arg1 等位置字段，不依赖两端的参数名称。
     /// </para>
     /// <para>
-    /// <b>类型写短名 + 文件头带 using</b>：<c>global::System.Collections.Generic.List&lt;int&gt;</c>
-    /// 这种写法虽然绝对安全，但把一行属性声明撑得完全没法阅读。
-    /// 命名空间集合由 <see cref="RpcDtoFactory"/> 从参数类型里收集后传进来。
+    /// <b>参数类型使用全限定名</b>：生成 DTO 不依赖 using 推断，避免不同命名空间中存在同名类型时发生歧义。
     /// </para>
     /// </remarks>
     public static class RpcDtoSourceBuilder
@@ -33,15 +29,13 @@ namespace VoyageForge.Rpc.CodeGen
         /// <param name="dtoName">DTO 简单类名。</param>
         /// <param name="controllerName">控制器名（写进注释便于溯源）。</param>
         /// <param name="methodName">方法名（写进注释便于溯源）。</param>
-        /// <param name="parameters">已按名称排序、并已带序号（0..N-1）的参数。</param>
-        /// <param name="usingNamespaces">参数类型用到的命名空间（已排序，会输出成 using 指令）。</param>
+        /// <param name="parameters">已按方法声明顺序排列、并已带序号（0..N-1）的参数。</param>
         public static string Emit(
             string dtoNamespace,
             string dtoName,
             string controllerName,
             string methodName,
-            IReadOnlyList<RpcDtoParameter> parameters,
-            IReadOnlyCollection<string> usingNamespaces)
+            IReadOnlyList<RpcDtoParameter> parameters)
         {
             var builder = new StringBuilder();
 
@@ -49,21 +43,14 @@ namespace VoyageForge.Rpc.CodeGen
             builder.AppendLine("// 由 VoyageForge Rpc.Generator 生成，请不要手改。");
             builder.AppendLine("//");
             builder.AppendLine("// 来源：控制器 " + controllerName + " 的方法 " + methodName + " 的参数。");
-            builder.AppendLine("// 参数按名称序数排序后逐个落成属性，保证调用方与被调用方各自生成时布局一致。");
+            builder.AppendLine("// 参数按声明顺序映射为 Arg0、Arg1 等字段，保证两端参数名不同也有相同布局。");
             builder.AppendLine("// 序列化实现由 MemoryPack 的 Emitter 发射到同名的 .MemoryPack.g.cs 里。");
             builder.AppendLine("#nullable enable");
             builder.AppendLine();
 
-            // using 放在 namespace 之前，类型才能写短名。
-            foreach (var ns in usingNamespaces)
-            {
-                builder.AppendLine("using " + ns + ";");
-            }
-
-            if (usingNamespaces.Count > 0)
-            {
-                builder.AppendLine();
-            }
+            // DTO 只需要 MemoryPack 属性；业务参数类型全部使用全限定名。
+            builder.AppendLine("using MemoryPack;");
+            builder.AppendLine();
 
             builder.AppendLine("namespace " + dtoNamespace);
             builder.AppendLine("{");
@@ -76,7 +63,7 @@ namespace VoyageForge.Rpc.CodeGen
             builder.AppendLine("    /// 必须保持 partial：序列化实现是本类的另一个 partial 部分。");
             builder.AppendLine("    /// </remarks>");
             builder.AppendLine("    [MemoryPackable]");
-            builder.AppendLine("    public partial class " + dtoName);
+            builder.AppendLine("    internal partial class " + dtoName);
             builder.AppendLine("    {");
             builder.AppendLine("        /// <summary>无参构造：MemoryPack 反序列化时用它创建实例。</summary>");
             builder.AppendLine("        public " + dtoName + "()");
@@ -87,12 +74,12 @@ namespace VoyageForge.Rpc.CodeGen
             {
                 builder.AppendLine();
                 builder.AppendLine("        /// <summary>");
-                builder.AppendLine("        /// 契约参数 <c>" + Escape(parameter.ParameterName) + "</c> 的映射。");
+                builder.AppendLine("        /// 方法参数 <c>" + Escape(parameter.ParameterName) + "</c> 的映射。");
                 builder.AppendLine("        /// </summary>");
                 builder.AppendLine("        /// <remarks>");
-                builder.AppendLine("        /// 原参数名 <c>" + Escape(parameter.ParameterName) + "</c>，类型 <c>" +
+                builder.AppendLine("        /// 原方法参数名 <c>" + Escape(parameter.ParameterName) + "</c>，类型 <c>" +
                                    Escape(parameter.TypeDisplay) + "</c>。");
-                builder.AppendLine("        /// 序号 " + parameter.Order + " 是排序后的位置，也就是 MemoryPack 的写入顺序；");
+                builder.AppendLine("        /// 序号 " + parameter.Order + " 是参数声明位置，也就是 MemoryPack 的写入顺序；");
                 builder.AppendLine("        /// 该编号在调用端与服务端必须完全一致。");
                 builder.AppendLine("        /// </remarks>");
                 builder.AppendLine("        [MemoryPackOrder(" + parameter.Order + ")]");

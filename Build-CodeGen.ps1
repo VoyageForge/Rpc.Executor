@@ -31,15 +31,8 @@ try {
     if ($Clean -and $NoRestore) { throw '-Clean 与 -NoRestore 不能同时使用。' }
 
     Write-BuildStatus '============================================================' Cyan
-    Write-BuildStatus 'Rpc.Executor Source Generator 构建开始' Cyan
+    Write-BuildStatus 'Rpc.Executor Session Source Generator 构建开始' Cyan
     Write-BuildStatus '[说明] 构建输出完整显示在当前终端，不创建日志文件。' DarkGray
-
-    # 清理旧版本错误放置在 Executor 内的 TCP 源码。
-    $cleanupScript = Join-Path $PackageRoot 'Cleanup-LegacyRpcTransport.ps1'
-    if (Test-Path -LiteralPath $cleanupScript) {
-        Write-BuildStatus '[迁移] 检查并清理 Rpc.Executor 中遗留的旧 TCP 源码。' Yellow
-        & $cleanupScript -NoPause
-    }
 
     Write-Progress -Activity '构建 Rpc.Executor Source Generator' -Status '检查构建环境' -PercentComplete 10
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {

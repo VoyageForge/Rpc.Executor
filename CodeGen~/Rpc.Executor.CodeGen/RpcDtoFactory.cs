@@ -12,14 +12,14 @@ namespace VoyageForge.Rpc.CodeGen
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 调用方程序集（<c>[ControllerMap]</c>）和服务端程序集（<c>[RpcController]</c>）是<b>分开编译</b>的，
+    /// 调用方 Session 与被调用方 Controller 程序集是<b>分开编译</b>的，
     /// 两边都需要同一个 DTO。这个工厂用<b>确定性的命名规则</b>保证两端算出同一个类型全名：
     /// </para>
     /// <code>
-    /// VoyageForge.Rpc.Generated.Dto.{ControllerName}{MethodName}Request
+    /// VoyageForge.Rpc.Generated.Dto.{ControllerPart}{MethodPart}_{SignatureHash}Request
     /// </code>
     /// <para>
-    /// 同一程序集内如果既有 Controller 又有 Map 引用了同一个契约，会重复请求同一个 DTO ——
+    /// 同一程序集内如果 Session 代理和本地 Controller 使用同一协议方法，会重复请求同一个 DTO ——
     /// 用 <c>generated</c> 集合去重，避免 Roslyn 报"重复 hint name"。
     /// </para>
     /// <para>
@@ -30,6 +30,8 @@ namespace VoyageForge.Rpc.CodeGen
     /// </remarks>
     public static class RpcDtoFactory
     {
+        private static readonly SymbolDisplayFormat ProtocolFqn = SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions & ~SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
         /// <summary>请求 DTO 的命名空间（两端必须一致）。</summary>
         public const string DtoNamespace = "VoyageForge.Rpc.Generated.Dto";
 
@@ -65,53 +67,41 @@ namespace VoyageForge.Rpc.CodeGen
                 return null;
             }
 
-            // DTO 类名首字母大写：控制器名可能来自 [Controller("calc")] 这种小写字符串，
-            // 直接拼会产出 calcAddRequest 这样的类名（合法但难看，也不符合 C# 命名规范）。
-            var dtoName = ToPascalCase(controllerName) + methodName + "Request";
+            // DTO 类型名仅供生成器内部使用：协议名清洗成合法标识符，完整协议签名哈希用于避免重名和重载冲突。
+            string signature = string.Join("\u001f", args.Select(parameter => parameter.Type.ToDisplayString(ProtocolFqn)));
+            ulong signatureHash = StableHash("v2\u001f" + controllerName + "\u001f" + methodName + "\u001f" + signature);
+            var dtoName = ToIdentifierPart(controllerName) + ToIdentifierPart(methodName) + "_" + signatureHash.ToString("X16") + "Request";
             var dtoFqn = DtoNamespace + "." + dtoName;
 
-            // 已经生成过（同一程序集里 Controller 与 Map 可能引用同一契约）。
+            // 已经生成过（同一程序集里 Session 代理和本地 Controller 可能对应同一协议方法）。
             if (!generated.Add(dtoFqn))
             {
                 return dtoFqn;
             }
 
-            // 先按参数名序数排序，再落成属性 —— 排序规则必须两端一致。
-            var ordered = args.OrderBy(parameter => parameter.Name, StringComparer.Ordinal).ToList();
-
-            // 收集类型用到的命名空间，供生成文件头部输出 using（这样属性类型能写短名）。
-            var usingNamespaces = new HashSet<string>(StringComparer.Ordinal) { "MemoryPack" };
+            // DTO 成员严格遵循方法参数声明顺序。参数名只影响生成属性名，不参与协议布局。
+            // 两端即使参数名不同，只要参数类型与顺序一致，MemoryPack 二进制布局仍一致。
+            var ordered = args.ToList();
 
             var parameters = new List<RpcDtoParameter>(ordered.Count);
             for (var index = 0; index < ordered.Count; index++)
             {
                 var parameter = ordered[index];
-                CollectNamespaces(parameter.Type, usingNamespaces);
-
                 parameters.Add(new RpcDtoParameter(
                     parameter.Name,
-                    ToPascalCase(parameter.Name),
-                    // 短名：int / string / List<int> / UserInfo，而不是 global::System.Int32 …
-                    parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    "Arg" + index,
+                    // 使用完整类型名，避免两端或同一方法的不同参数存在同名类型时发生 using 冲突。
+                    parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     !parameter.Type.IsValueType,
                     index));
             }
-
-            // 自身命名空间不需要 using。
-            usingNamespaces.Remove(DtoNamespace);
-
-            var orderedNamespaces = usingNamespaces
-                .Where(name => !string.IsNullOrEmpty(name))
-                .OrderBy(name => name, StringComparer.Ordinal)
-                .ToList();
 
             var dtoSource = RpcDtoSourceBuilder.Emit(
                 DtoNamespace,
                 dtoName,
                 controllerName,
                 methodName,
-                parameters,
-                orderedNamespaces);
+                parameters);
 
             var result = emitter.Emit(dtoSource, dtoFqn);
             if (!result.Success)
@@ -141,39 +131,17 @@ namespace VoyageForge.Rpc.CodeGen
             return dtoFqn;
         }
 
-        /// <summary>
-        /// 递归收集类型用到的命名空间（含泛型实参与数组元素类型）。
-        /// </summary>
-        /// <remarks>
-        /// 短名解析依赖这些 <c>using</c>：漏掉一个就会让生成的 DTO 编译不过，
-        /// 而且报错位置在生成文件里，排查起来比漏写 using 更绕。
-        /// </remarks>
-        private static void CollectNamespaces(ITypeSymbol type, HashSet<string> namespaces)
+        private static ulong StableHash(string value)
         {
-            switch (type)
+            const ulong offset = 14695981039346656037UL;
+            const ulong prime = 1099511628211UL;
+            ulong hash = offset;
+            foreach (byte valueByte in Encoding.UTF8.GetBytes(value ?? string.Empty))
             {
-                case IArrayTypeSymbol array:
-                    CollectNamespaces(array.ElementType, namespaces);
-                    return;
-
-                case IPointerTypeSymbol pointer:
-                    CollectNamespaces(pointer.PointedAtType, namespaces);
-                    return;
-
-                case INamedTypeSymbol named:
-                    if (!named.ContainingNamespace.IsGlobalNamespace)
-                    {
-                        namespaces.Add(named.ContainingNamespace.ToDisplayString());
-                    }
-
-                    // 泛型实参也要处理：List<UserInfo> 里的 UserInfo 需要它自己的命名空间。
-                    foreach (var typeArgument in named.TypeArguments)
-                    {
-                        CollectNamespaces(typeArgument, namespaces);
-                    }
-
-                    return;
+                hash ^= valueByte;
+                hash = unchecked(hash * prime);
             }
+            return hash;
         }
 
         /// <summary>把失败结果翻译成人能读的一句话。</summary>
@@ -195,14 +163,20 @@ namespace VoyageForge.Rpc.CodeGen
         }
 
         /// <summary>
-        /// 把 camelCase 参数名转成 PascalCase 属性名。
+        /// 把协议名称转换为合法的 DTO 标识符片段。
         /// </summary>
-        /// <remarks>
-        /// 必须<b>公开</b>并被生成器复用：DTO 的属性名（这里）和代理里的对象初始化器
-        /// （<c>ControllerRpcGenerator</c>）一旦用了两套转换规则，生成代码就会编译不过
-        /// 或者更糟——编译通过但字段错位。单一来源是这个方法存在的理由。
-        /// </remarks>
-        public static string ToPascalCase(string name)
+        /// <remarks>用于 DTO 类型名；清洗协议名称中的非标识符字符。</remarks>
+        private static string ToIdentifierPart(string value)
+        {
+            string safe = new string((value ?? string.Empty)
+                .Select(character => char.IsLetterOrDigit(character) || character == '_' ? character : '_')
+                .ToArray());
+            if (safe.Length == 0) safe = "_";
+            if (char.IsDigit(safe[0])) safe = "_" + safe;
+            return ToPascalCase(safe);
+        }
+
+        private static string ToPascalCase(string name)
         {
             if (string.IsNullOrEmpty(name))
             {

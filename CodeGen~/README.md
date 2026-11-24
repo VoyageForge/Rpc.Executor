@@ -1,17 +1,26 @@
 # Rpc.Executor.CodeGen
 
-独立 `netstandard2.0` Roslyn Source Generator 项目。Unity 不编译 `CodeGen~` 中的源码，而是加载构建后部署到 `Runtime/Analyzers/Rpc.Executor.CodeGen.dll` 的 Analyzer。
+独立 `netstandard2.0` Roslyn Source Generator 项目，面向 Unity 2022.3 / C# 9。当前只保留统一 Session RPC 生成路径。
 
-## 生成器
+## ControllerRpcGenerator
 
-| 生成器 | 用途 |
-|---|---|
-| `ControllerRpcGenerator` | 新双向 Controller RPC：生成 ControllerMap 代理、Controller Dispatcher 和每程序集 Catalog |
-| `LegacyRpcGenerator`（源码文件 `RpcGenerator.cs`） | 旧 `[RpcService]` / `ServicesMap` 迁移兼容路径 |
-| `RpcHandlerGenerator` | `IRequestHandler` / `IAsyncRequestHandler` 强类型处理器目录 |
-| `RpcMessageTypeIdGenerator` | `[RpcMessage]` 消息类型编号 |
+- 扫描 `[RpcSession] partial class XxxSession : Session`（必须直接继承 Session，且不得声明构造函数或 Create 成员）。
+- 读取其 `[RpcApi(typeof(IContract))]`，生成对应 API 属性和内部 Proxy。
+- 生成私有构造函数和 `Create()` 工厂，外部不能直接 `new` 该 Session。
+- 扫描 `[RpcController("Name")] partial class`，只处理显式标记 `[RpcMethod]` 的实例方法。
+- 为本地 Controller 生成 Dispatcher 和程序集级 `GeneratedRpcControllerCatalog`。
+- DTO 由本生成器构造临时 Compilation，再复用 MemoryPack Generator 的 TypeMeta / Emit 逻辑生成序列化实现。
 
-## 构建与部署
+## 协议要点
+
+- API 契约与本地 Controller 可以分属不同程序集，不要求共享接口引用。
+- 两端必须使用相同的 Controller 名称、协议方法名、参数类型及参数顺序，并保持返回类型一致。
+- 参数名不属于协议；DTO 字段固定为 `Arg0`、`Arg1` 等位置名称。
+- DTO 类型名包含参数签名哈希，支持同名方法的不同参数签名，且 DTO 为 `internal`。
+- `CancellationToken` 不参与 DTO 和 MethodId；Session 使用独立 `RpcCancel` 帧把本地取消通知传递到对端。
+- 生成器不生成鉴权代码。
+
+## 构建
 
 在 Package 根目录执行：
 
@@ -25,11 +34,4 @@
 dotnet build .\Rpc.Executor.CodeGen.sln -c Release
 ```
 
-构建脚本将 DLL 和 `RoslynAnalyzer` Asset Label 元数据部署到 `Runtime/Analyzers`。本次源码包不携带旧版预编译 DLL，首次导入 Unity 前必须先构建。更新 Analyzer 后重启 Unity。
-
-## 约束
-
-- 目标框架 `netstandard2.0`，语言版本 C# 9；
-- 使用 `ISourceGenerator + ISyntaxReceiver`；
-- Generator 只处理当前 Compilation 输入中真实存在的源码和引用符号；
-- `ControllerRpcGenerator` 不会生成 MemoryPack DTO 再期待 MemoryPack Generator 处理，用户 DTO 必须在用户源码中声明为 `[MemoryPackable] partial`。
+构建脚本将 DLL 部署到 `Runtime/Analyzers` 并生成 Unity Analyzer 元数据。当前源码包不保证附带可直接使用的最新 DLL，修改生成器后必须重新构建并重启 Unity。

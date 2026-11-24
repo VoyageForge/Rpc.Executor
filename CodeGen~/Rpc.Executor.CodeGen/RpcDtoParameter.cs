@@ -18,10 +18,10 @@ namespace VoyageForge.Rpc.CodeGen
     {
         /// <summary>构造一个参数模型。</summary>
         /// <param name="parameterName">契约里的原始参数名，用于注释与诊断。</param>
-        /// <param name="propertyName">转成 PascalCase 后的属性名。</param>
-        /// <param name="typeDisplay">参数类型的<b>短名</b>（如 <c>int</c>、<c>List&lt;UserInfo&gt;</c>）。</param>
+        /// <param name="propertyName">固定的位置字段名（Arg0、Arg1 等）。</param>
+        /// <param name="typeDisplay">参数类型的全限定名。</param>
         /// <param name="isReferenceType">是否引用类型：是则补 <c>= default!;</c> 避免 CS8618。</param>
-        /// <param name="order">该属性在序列化布局中的序号（从 0 开始，= 排序后的位置）。</param>
+        /// <param name="order">该属性在序列化布局中的序号（从 0 开始，等于方法参数声明位置）。</param>
         public RpcDtoParameter(
             string parameterName,
             string propertyName,
@@ -39,16 +39,16 @@ namespace VoyageForge.Rpc.CodeGen
         /// <summary>契约里的原始参数名。</summary>
         public string ParameterName { get; }
 
-        /// <summary>DTO 上对应的属性名（PascalCase）。</summary>
+        /// <summary>DTO 上对应的位置字段名（Arg0、Arg1 等）。</summary>
         public string PropertyName { get; }
 
-        /// <summary>DTO 上对应属性的类型<b>短名</b>。</summary>
+        /// <summary>DTO 上对应属性的全限定类型。</summary>
         public string TypeDisplay { get; }
 
         /// <summary>该参数类型是否为引用类型。</summary>
         public bool IsReferenceType { get; }
 
-        /// <summary>序列化序号（从 0 开始，等于按参数名排序后的位置）。</summary>
+        /// <summary>序列化序号（从 0 开始，等于方法参数声明位置）。</summary>
         public int Order { get; }
     }
 }
