@@ -22,6 +22,11 @@ namespace VoyageForge.Rpc.CodeGen
     /// 同一程序集内如果既有 Controller 又有 Map 引用了同一个契约，会重复请求同一个 DTO ——
     /// 用 <c>generated</c> 集合去重，避免 Roslyn 报"重复 hint name"。
     /// </para>
+    /// <para>
+    /// <b>可读性策略</b>：属性类型写短名（<c>int</c>、<c>List&lt;UserInfo&gt;</c>），
+    /// 并把用到的命名空间收集成文件头部的 <c>using</c>。
+    /// 生成代码是给人看、也要给人 debug 的，全限定名会把一行属性声明撑得没法读。
+    /// </para>
     /// </remarks>
     public static class RpcDtoFactory
     {
@@ -46,7 +51,7 @@ namespace VoyageForge.Rpc.CodeGen
         /// <param name="methodName">方法名。</param>
         /// <param name="args">业务参数（已剔除 CancellationToken）。</param>
         /// <param name="generated">已生成 DTO 的完整名集合，用于去重。</param>
-        public static string? EnsureDto(
+        public static string EnsureDto(
             GeneratorExecutionContext context,
             RpcDtoMemoryPackEmitter emitter,
             string controllerName,
@@ -60,7 +65,9 @@ namespace VoyageForge.Rpc.CodeGen
                 return null;
             }
 
-            var dtoName = controllerName + methodName + "Request";
+            // DTO 类名首字母大写：控制器名可能来自 [Controller("calc")] 这种小写字符串，
+            // 直接拼会产出 calcAddRequest 这样的类名（合法但难看，也不符合 C# 命名规范）。
+            var dtoName = ToPascalCase(controllerName) + methodName + "Request";
             var dtoFqn = DtoNamespace + "." + dtoName;
 
             // 已经生成过（同一程序集里 Controller 与 Map 可能引用同一契约）。
@@ -69,17 +76,42 @@ namespace VoyageForge.Rpc.CodeGen
                 return dtoFqn;
             }
 
-            // 参数 → 属性：按名称序数排序，保证两端布局一致。
-            var parameters = args
-                .Select(parameter => new RpcDtoParameter(
+            // 先按参数名序数排序，再落成属性 —— 排序规则必须两端一致。
+            var ordered = args.OrderBy(parameter => parameter.Name, StringComparer.Ordinal).ToList();
+
+            // 收集类型用到的命名空间，供生成文件头部输出 using（这样属性类型能写短名）。
+            var usingNamespaces = new HashSet<string>(StringComparer.Ordinal) { "MemoryPack" };
+
+            var parameters = new List<RpcDtoParameter>(ordered.Count);
+            for (var index = 0; index < ordered.Count; index++)
+            {
+                var parameter = ordered[index];
+                CollectNamespaces(parameter.Type, usingNamespaces);
+
+                parameters.Add(new RpcDtoParameter(
                     parameter.Name,
                     ToPascalCase(parameter.Name),
-                    parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    !parameter.Type.IsValueType))
-                .OrderBy(parameter => parameter.ParameterName, StringComparer.Ordinal)
+                    // 短名：int / string / List<int> / UserInfo，而不是 global::System.Int32 …
+                    parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    !parameter.Type.IsValueType,
+                    index));
+            }
+
+            // 自身命名空间不需要 using。
+            usingNamespaces.Remove(DtoNamespace);
+
+            var orderedNamespaces = usingNamespaces
+                .Where(name => !string.IsNullOrEmpty(name))
+                .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
 
-            var dtoSource = RpcDtoSourceBuilder.Emit(DtoNamespace, dtoName, controllerName, methodName, parameters);
+            var dtoSource = RpcDtoSourceBuilder.Emit(
+                DtoNamespace,
+                dtoName,
+                controllerName,
+                methodName,
+                parameters,
+                orderedNamespaces);
 
             var result = emitter.Emit(dtoSource, dtoFqn);
             if (!result.Success)
@@ -104,9 +136,44 @@ namespace VoyageForge.Rpc.CodeGen
             }
 
             context.AddSource(dtoName + ".g.cs", SourceText.From(dtoSource, Encoding.UTF8));
-            context.AddSource(dtoName + ".MemoryPack.g.cs", SourceText.From(result.FormatterSource!, Encoding.UTF8));
+            context.AddSource(dtoName + ".MemoryPack.g.cs", SourceText.From(result.FormatterSource, Encoding.UTF8));
 
             return dtoFqn;
+        }
+
+        /// <summary>
+        /// 递归收集类型用到的命名空间（含泛型实参与数组元素类型）。
+        /// </summary>
+        /// <remarks>
+        /// 短名解析依赖这些 <c>using</c>：漏掉一个就会让生成的 DTO 编译不过，
+        /// 而且报错位置在生成文件里，排查起来比漏写 using 更绕。
+        /// </remarks>
+        private static void CollectNamespaces(ITypeSymbol type, HashSet<string> namespaces)
+        {
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    CollectNamespaces(array.ElementType, namespaces);
+                    return;
+
+                case IPointerTypeSymbol pointer:
+                    CollectNamespaces(pointer.PointedAtType, namespaces);
+                    return;
+
+                case INamedTypeSymbol named:
+                    if (!named.ContainingNamespace.IsGlobalNamespace)
+                    {
+                        namespaces.Add(named.ContainingNamespace.ToDisplayString());
+                    }
+
+                    // 泛型实参也要处理：List<UserInfo> 里的 UserInfo 需要它自己的命名空间。
+                    foreach (var typeArgument in named.TypeArguments)
+                    {
+                        CollectNamespaces(typeArgument, namespaces);
+                    }
+
+                    return;
+            }
         }
 
         /// <summary>把失败结果翻译成人能读的一句话。</summary>

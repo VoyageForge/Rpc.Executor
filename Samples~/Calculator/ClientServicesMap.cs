@@ -30,7 +30,7 @@ namespace VoyageForge.Rpc.Samples
         public const string UserServiceName = "user";
 
         /// <summary>方法名常量。与服务端 <c>[RpcMethod]</c> 的方法名一致。</summary>
-        private const string GetNameMethod = "GetName";
+        private const string GetNameMethod = nameof(GetName);
 
         /// <summary>
         /// 预取的 <c>user</c> 服务命名空间。
