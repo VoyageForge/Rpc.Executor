@@ -1,9 +1,7 @@
 {
   "name": "VoyageForge.Rpc.Executor",
   "rootNamespace": "Rpc.Executor",
-  "references": [
-    "VoyageForge.Rpc.Transport"
-  ],
+  "references": [],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

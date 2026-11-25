@@ -27,12 +27,16 @@ function Write-BuildStatus {
     Write-Host $Message -ForegroundColor $Color
 }
 
+$buildLog = Join-Path ([IO.Path]::GetTempPath()) ('Rpc.Executor-CodeGen-{0}.log' -f [guid]::NewGuid().ToString('N'))
+$transcribing = $false
 try {
+    Start-Transcript -LiteralPath $buildLog -ErrorAction Stop | Out-Null
+    $transcribing = $true
     if ($Clean -and $NoRestore) { throw '-Clean 与 -NoRestore 不能同时使用。' }
 
     Write-BuildStatus '============================================================' Cyan
     Write-BuildStatus 'Rpc.Executor Session Source Generator 构建开始' Cyan
-    Write-BuildStatus '[说明] 构建输出完整显示在当前终端，不创建日志文件。' DarkGray
+    Write-BuildStatus '[说明] 构建输出完整显示在当前终端。' DarkGray
 
     Write-Progress -Activity '构建 Rpc.Executor Source Generator' -Status '检查构建环境' -PercentComplete 10
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -93,17 +97,19 @@ try {
     Write-Progress -Activity '构建 Rpc.Executor Source Generator' -Status '复制 DLL 和 Unity Analyzer 元数据' -PercentComplete 90
     New-Item -ItemType Directory -Path $AnalyzerDirectory -Force | Out-Null
 
-    # Unity 会把 Runtime/Analyzers 下的 analyzer DLL 加载进编辑器进程并一直持有句柄，
-    # 所以 Unity 开着的时候这里几乎必然 IOException。这不是脚本缺陷，
-    # 但默认的 Copy-Item 报错只给一句 "The process cannot access the file"，
-    # 很容易被误当成"脚本又闪退了"。这里换成可操作的提示。
+    # Unity 可能仍在读取旧 DLL。先在同一目录写好新文件，再原子替换。
+    $stagedDll = $TargetDll + '.' + [guid]::NewGuid().ToString('N') + '~'
     try {
-        Copy-Item -LiteralPath $BuiltDll -Destination $TargetDll -Force
+        [IO.File]::Copy($BuiltDll, $stagedDll)
+        if ([IO.File]::Exists($TargetDll)) {
+            [IO.File]::Replace($stagedDll, $TargetDll, [System.Management.Automation.Language.NullString]::Value)
+        } else {
+            [IO.File]::Move($stagedDll, $TargetDll)
+        }
         Copy-Item -LiteralPath $MetaTemplate -Destination $TargetMeta -Force
     }
-    catch [System.IO.IOException] {
-        throw ("无法覆盖 {0}：文件正被占用。Unity 编辑器会一直持有 analyzer DLL 的句柄，" +
-               "请先关闭 Unity 再重新运行本脚本。原始错误：{1}" -f $TargetDll, $_.Exception.Message)
+    finally {
+        if ([IO.File]::Exists($stagedDll)) { [IO.File]::Delete($stagedDll) }
     }
     if (-not (Test-Path -LiteralPath $TargetDll) -or -not (Test-Path -LiteralPath $TargetMeta)) {
         throw 'Analyzer DLL 或 .meta 文件复制失败。'
@@ -116,6 +122,7 @@ try {
 }
 catch {
     $Failure = $_
+    if ($transcribing) { Write-Host "构建日志：$buildLog" }
     Write-BuildStatus ("[失败] {0}" -f $_.Exception.Message) Red
     if ($_.ScriptStackTrace) { Write-BuildStatus $_.ScriptStackTrace DarkRed }
 }
@@ -128,6 +135,7 @@ finally {
         Write-BuildStatus 'Rpc.Executor Source Generator 构建未完成，请根据上方第一个错误排查。' Red
     }
     Write-BuildStatus '============================================================' Cyan
+    if ($transcribing) { Stop-Transcript | Out-Null }
     if (-not $NoPause) {
         Write-Host ''
         [void](Read-Host '按 Enter 键关闭窗口')

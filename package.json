@@ -1,6 +1,6 @@
 {
   "name": "com.voyageforge.rpc-executor",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "displayName": "VoyageForge RPC Executor",
   "description": "Session API 代理生成、本地 Controller 分发与双向 RPC 执行。",
   "unity": "2022.3",
@@ -14,7 +14,5 @@
       "path": "Samples~/Session"
     }
   ],
-  "dependencies": {
-    "com.voyageforge.rpc-transport": "0.4.0"
-  }
+  "dependencies": {}
 }

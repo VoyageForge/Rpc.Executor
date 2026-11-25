@@ -1,13 +1,16 @@
 using System.Threading;
 using System.Threading.Tasks;
-using VoyageForge.Rpc.Transport.Session;
+using VoyageForge.Rpc.Transport;
 
 namespace VoyageForge.Rpc.Samples.Contracts
 {
-    /// <summary>调用方持有的协议声明；被调用方不需要引用此接口。</summary>
+    /// <summary>
+    /// 调用方持有的协议声明；被调用方不需要引用此接口。
+    /// </summary>
     [RpcContract("Session")]
-    public interface ISessionApi
+    public partial interface ISessionApi
     {
-        Task<string> ConnectAsync(string userId, string token, CancellationToken ct);
+        Task<string> WhoAmIAsync();
+        Task<string> LoginAsync(string userId, string token, CancellationToken ct);
     }
 }
