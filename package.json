@@ -1,6 +1,6 @@
 {
   "name": "com.voyageforge.rpc-executor",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "displayName": "VoyageForge RPC Executor",
   "description": "Session API 代理生成、本地 Controller 分发与双向 RPC 执行。",
   "unity": "2022.3",

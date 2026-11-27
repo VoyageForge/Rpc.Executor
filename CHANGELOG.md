@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- 明确 LocalExecutor 的工厂调用时机，以及双向 RPC 示例对 Transport 的依赖。
+
 ## 0.4.2
 
 - 同步 Rpc.Transport 根命名空间调整，生成代码现在直接引用 `VoyageForge.Rpc.Transport`。

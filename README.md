@@ -6,7 +6,7 @@ Unity 2022.3 RPC 源代码生成与本地 Controller 执行包：`com.voyageforg
 
 `VoyageForge.Rpc.Executor` 运行时程序集可独立使用。业务 Controller 继承 ControllerBase；注册工厂后，`executor.Local<MyController>()` 返回工厂创建的实例。RPC 相关基类和特性位于 VoyageForge.Rpc.Transport。下述 Session 示例需同时安装 Transport。
 
-例如，Console 在初始化时注册本地工厂，命令执行时取用 Controller。
+在 0.5.0 中，Console 和 Transport 分别依赖 Executor。每次调用 `Local<T>()` 都会执行对应的工厂。若要共享状态，可让工厂返回同一个实例。
 
 ```csharp
 var executor = new LocalExecutor();
@@ -70,7 +70,7 @@ MethodId 使用 FNV-1a 64，协议 Key 包含版本、Controller 名称、方法
 
 ## Session 与权限
 
-`Session` 是双端统一的连接抽象，不区分 ClientSession / ServerSession。它提供双向请求处理、生命周期和实例级 `ConcurrentDictionary<string, object> Blackboard`。
+客户端和服务端都继承 Transport 的 `Session`。两端可以使用不同的派生类型，各自声明远端契约和本地 Controller。逻辑会话持有独立的 `Blackboard`，断线恢复后继续使用原实例。
 
 RPC Runtime 不实现登录、鉴权、权限下发或权限校验。应用可以把用户上下文、鉴权委托或权限数据放入 `Session.Blackboard`，并在自己的 Controller 中判断。Blackboard 容器并发安全，但其中对象的线程安全由应用负责。
 
